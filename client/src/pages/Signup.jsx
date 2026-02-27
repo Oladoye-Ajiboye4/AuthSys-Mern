@@ -1,4 +1,10 @@
-import React from 'react'
+import React from 'react';
+import { Link, useNavigate } from 'react-router';
+import { useFormik } from 'formik';
+import * as Yup from 'yup';
+import { ToastContainer, toast, Bounce } from 'react-toastify';
+import InputField from '../components/InputField';
+import { Icon } from '@iconify/react';
 
 const Signup = () => {
   const navigate = useNavigate();
@@ -49,7 +55,46 @@ const Signup = () => {
   });
 
   return (
-    <div>Signup</div>
+    // Easil customize the Sign up page to your taste
+    <main className='w-full h-screen flex justify-center items-center bg-linear-to-r from-purple-500 to-pink-500'>
+      <div className='w-80 h-screen flex flex-col justify-center gap-7 items-center'>
+
+
+        <form className='flex flex-col gap-4 w-80' onSubmit={formik.handleSubmit}>
+          {/* Specify the input the fields  */}
+          <h1 className='text-4xl font-bold text-center'>Sign Up</h1>
+          <InputField type="text" name="username" placeholder="Username" formik={formik} />
+          <InputField type="text" name="email" placeholder="Email" formik={formik} />
+          <InputField type="password" name="password" placeholder="Password" formik={formik} />
+          <InputField type="password" name="confirmPassword" placeholder="Confirm Password" formik={formik} />
+
+          <button
+            type='submit'
+            className='bg-amber-500 p-3 mt-2 rounded-lg hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold'
+            disabled={!formik.isValid}
+          >
+            Sign Up
+          </button>
+        </form>
+
+        <div className='flex gap-4 font-bold text-lg text-white'>
+          <Link className='bg-amber-700 p-4 rounded-2xl hover:bg-amber-800' to='/signin'>Sign In</Link>
+          <Link className='bg-red-700 p-4 rounded-2xl hover:bg-red-800' to='/'>Go Home</Link>
+        </div>
+
+        <div className='flex flex-col gap-5 w-full'>
+          <button className='flex gap-3 justify-center items-center font-bold bg-blue-600 p-3 rounded-lg hover:bg-blue-700 text-white'>
+            <Icon icon="material-icon-theme:google" width="25" height="25" />
+            <span>Google</span>
+          </button>
+          <button className='flex gap-3 justify-center items-center font-bold bg-gray-800 p-3 rounded-lg hover:bg-gray-900 text-white'>
+            <Icon icon="mdi:github" width="25" height="25" />
+            <span>GitHub</span>
+          </button>
+        </div>
+      </div>
+      <ToastContainer position="top-center" theme="light" transition={Bounce} />
+    </main>
   )
 }
 
