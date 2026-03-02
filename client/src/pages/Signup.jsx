@@ -6,7 +6,14 @@ import { ToastContainer, toast, Bounce } from 'react-toastify';
 import InputField from '../components/InputField';
 import { Icon } from '@iconify/react';
 
+import axios from 'axios';
+import firebaseConfig from '../firebase/config'
+import { initializeApp } from "firebase/app"
+import { getAuth, signInWithPopup, GoogleAuthProvider } from "firebase/auth"
+
 const Signup = () => {
+  const signupUrl = 'http://localhost:7890/handle-signup'
+
   const navigate = useNavigate();
 
   // Toastify notification for successful sign up
@@ -54,43 +61,101 @@ const Signup = () => {
     },
   });
 
+
+  //Google signin
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth();
+  const provider = new GoogleAuthProvider();
+  auth.useDeviceLanguage();
+
+  const googleSignUpBtn = () => {
+    signInWithPopup(auth, provider)
+      .then((result) => {
+        // This gives you a Google Access Token. You can use it to access the Google API.
+        const credential = GoogleAuthProvider.credentialFromResult(result);
+        const token = credential.accessToken;
+        // The signed-in user info.
+        const user = result.user;
+        // IdP data available using getAdditionalUserInfo(result)
+        // ...
+        console.log('Success', user)
+
+        axios.post(signupUrl, user)
+          .then((result) => {
+            console.log('result', result)
+          })
+          .catch((error) => {
+            console.log(error)
+          })
+      }).catch((error) => {
+        // Handle Errors here.
+        const errorCode = error.code;
+        const errorMessage = error.message;
+        // The email of the user's account used.
+        const email = error.customData.email;
+        // The AuthCredential type that was used.
+        const credential = GoogleAuthProvider.credentialFromError(error);
+        // ...
+        console.log('Error logging in', error)
+
+      });
+
+  }
+
   return (
     // Easil customize the Sign up page to your taste
-    <main className='w-full h-screen flex justify-center items-center bg-linear-to-r from-purple-500 to-pink-500'>
-      <div className='w-80 h-screen flex flex-col justify-center gap-7 items-center'>
+    <main className='min-h-screen w-full bg-[radial-gradient(90rem_90rem_at_10%_10%,rgba(251,191,36,0.22),transparent_45%),radial-gradient(70rem_70rem_at_90%_0%,rgba(244,63,94,0.18),transparent_40%),linear-gradient(135deg,#fff7ed_0%,#fff_40%,#fef3c7_100%)] flex items-center justify-center p-4 sm:p-8'>
+      <div className='w-full max-w-4xl grid grid-cols-1 md:grid-cols-2 gap-8 items-center'>
+        <section className='hidden md:flex flex-col gap-5 p-8 rounded-3xl bg-white/70 backdrop-blur border border-amber-200 shadow-[0_20px_60px_-25px_rgba(120,53,15,0.45)]'>
+          <span className='text-sm font-semibold tracking-widest text-amber-700 uppercase'>Welcome</span>
+          <h1 className='text-4xl font-extrabold text-amber-950 leading-tight'>Create your account in minutes.</h1>
+          <p className='text-amber-900/80 text-base leading-relaxed'>Join the community and keep everything synced across devices. Simple, secure, and built for focus.</p>
+          <div className='flex items-center gap-3 text-amber-900'>
+            <span className='h-2 w-2 rounded-full bg-amber-600' />
+            <span className='text-sm font-medium'>No credit card required</span>
+          </div>
+          <div className='flex items-center gap-3 text-amber-900'>
+            <span className='h-2 w-2 rounded-full bg-amber-600' />
+            <span className='text-sm font-medium'>Free forever plan included</span>
+          </div>
+        </section>
 
+        <div className='w-full rounded-3xl bg-white/90 backdrop-blur border border-amber-100 shadow-[0_24px_70px_-35px_rgba(120,53,15,0.6)] p-6 sm:p-8'>
+          <form className='flex flex-col gap-4' onSubmit={formik.handleSubmit}>
+            {/* Specify the input the fields  */}
+            <div className='text-center space-y-2'>
+              <h1 className='text-3xl sm:text-4xl font-extrabold text-amber-950'>Sign Up</h1>
+              <p className='text-sm sm:text-base text-amber-900/70'>Start fresh with a clean, focused workspace.</p>
+            </div>
+            <InputField type="text" name="username" placeholder="Username" formik={formik} />
+            <InputField type="text" name="email" placeholder="Email" formik={formik} />
+            <InputField type="password" name="password" placeholder="Password" formik={formik} />
+            <InputField type="password" name="confirmPassword" placeholder="Confirm Password" formik={formik} />
 
-        <form className='flex flex-col gap-4 w-80' onSubmit={formik.handleSubmit}>
-          {/* Specify the input the fields  */}
-          <h1 className='text-4xl font-bold text-center'>Sign Up</h1>
-          <InputField type="text" name="username" placeholder="Username" formik={formik} />
-          <InputField type="text" name="email" placeholder="Email" formik={formik} />
-          <InputField type="password" name="password" placeholder="Password" formik={formik} />
-          <InputField type="password" name="confirmPassword" placeholder="Confirm Password" formik={formik} />
+            <button
+              type='submit'
+              className='bg-amber-700 text-white py-3 rounded-xl font-bold shadow-lg shadow-amber-200/60 hover:bg-amber-800 transition disabled:opacity-50 disabled:cursor-not-allowed'
+              disabled={!formik.isValid}
+            >
+              Sign Up
+            </button>
+          </form>
 
-          <button
-            type='submit'
-            className='bg-amber-500 p-3 mt-2 rounded-lg hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold'
-            disabled={!formik.isValid}
-          >
-            Sign Up
-          </button>
-        </form>
+          <div className='mt-6 flex flex-col sm:flex-row gap-3 font-semibold text-base text-amber-950'>
+            <Link className='flex-1 text-center bg-amber-700 text-white py-3 rounded-xl hover:bg-amber-800 transition' to='/signin'>Sign In</Link>
+            <Link className='flex-1 text-center bg-amber-100 text-amber-900 py-3 rounded-xl hover:bg-amber-200 transition' to='/'>Go Home</Link>
+          </div>
 
-        <div className='flex gap-4 font-bold text-lg text-white'>
-          <Link className='bg-amber-700 p-4 rounded-2xl hover:bg-amber-800' to='/signin'>Sign In</Link>
-          <Link className='bg-red-700 p-4 rounded-2xl hover:bg-red-800' to='/'>Go Home</Link>
-        </div>
-
-        <div className='flex flex-col gap-5 w-full'>
-          <button className='flex gap-3 justify-center items-center font-bold bg-blue-600 p-3 rounded-lg hover:bg-blue-700 text-white'>
-            <Icon icon="material-icon-theme:google" width="25" height="25" />
-            <span>Google</span>
-          </button>
-          <button className='flex gap-3 justify-center items-center font-bold bg-gray-800 p-3 rounded-lg hover:bg-gray-900 text-white'>
-            <Icon icon="mdi:github" width="25" height="25" />
-            <span>GitHub</span>
-          </button>
+          <div className='mt-6 flex flex-col gap-3'>
+            <button type='button' onClick={() => googleSignUpBtn()} className='flex gap-3 justify-center items-center font-semibold bg-white border border-amber-200 py-3 rounded-xl hover:bg-amber-50 transition text-amber-950'>
+              <Icon icon="material-icon-theme:google" width="22" height="22" />
+              <span>Continue with Google</span>
+            </button>
+            <button type='button' className='flex gap-3 justify-center items-center font-semibold bg-amber-950 py-3 rounded-xl hover:bg-amber-900 transition text-white'>
+              <Icon icon="mdi:github" width="22" height="22" />
+              <span>Continue with GitHub</span>
+            </button>
+          </div>
         </div>
       </div>
       <ToastContainer position="top-center" theme="light" transition={Bounce} />
