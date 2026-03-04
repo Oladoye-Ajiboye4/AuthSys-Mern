@@ -1,15 +1,47 @@
-import React, {useState} from 'react'
+import React, { useState, useEffect } from 'react'
 import { ToastContainer, toast, Bounce } from 'react-toastify';
 import axios from 'axios';
 
 
 const Dashboard = () => {
-  const dashboardUrl = 'http://localhost:7890/getDashoard'
+  const dashboardUrl = 'http://localhost:7890/getDashboard'
   const [user, setUser] = useState({})
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+
+    if (!token) {
+      errorNotify('No token found. Please sign in again.');
+      return;
+    }
+
+    axios.get(dashboardUrl, {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    })
+      .then((result) => {
+        if (result.status === 200) {
+          console.log(result.data);
+          setUser(result.data.user);
+          notify();
+          
+        } else if (result.status === 401 || result.status === 500 || result.status === 404) {
+          errorNotify(result.data.message)
+        } else {
+          errorNotify('Unexpected server response. Try again later')  
+        }
+      })
+      .catch((error) => {
+        console.log(error)
+        errorNotify(error?.response?.data?.message || 'Failed to fetch dashboard data')
+      })
+    
+  }, [])
 
   // Toastify notification for successful sign in
   const notify = () => {
-    toast.success('Sign in Successful!', {
+    toast.success(`Welcome Champ!`, {
       position: "top-center",
       autoClose: 5000,
       hideProgressBar: false,
@@ -34,20 +66,6 @@ const Dashboard = () => {
       transition: Bounce,
     });
   };
-
-
-  axios.get(dashboardUrl)
-    .then((result) => {
-      if (result.status === 200) {
-        console.log(result.data);
-        setUser(result.data);
-      }
-    })
-    .catch((error) => {
-      console.log(error)
-      errorNotify('Failed to fetch dashboard data')
-    })
-
 
   return (
     <>

@@ -64,7 +64,12 @@ const Signin = () => {
       axios.post(manualSigninUrl, values)
         .then((result) => {
           if (result.status === 200) {
+            const token = result.data.user.token;
+            if(token) {
+              localStorage.setItem('token', token);
+            }
             notify();
+            localStorage.setItem('user', JSON.stringify(result.data.user));
             setTimeout(() => {
               navigate('/dashboard');
             }, 1000);

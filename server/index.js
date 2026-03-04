@@ -19,7 +19,7 @@ app.post('/handle-signup', handleSignup)
 app.post('/handle-signin', handleSignin)
 app.post('/manual-signup', manualSignup)
 app.post('/manual-signin', manualSignin)
-app.get('/getDashoard', getDashboard)
+app.get('/getDashboard', getDashboard)
 
 app.listen(PORT, () => {
     console.log(`Server listening on http://localhost:${PORT}`)

@@ -29,11 +29,11 @@ const getDashboard = (req, res) => {
                 if (!user) {
                     return res.status(404).json({ status: false, message: "User not found" })
                 }
-                res.status(200).json({ status: true, message: "Token is valid", user })
+                return res.status(200).json({ status: true, message: "Token is valid", user })
             })
             .catch((err) => {
                 console.error(err);
-                res.status(500).json({ status: false, message: "Internal server error" })
+                return res.status(500).json({ status: false, message: "Internal server error" })
             })
     });
 }
