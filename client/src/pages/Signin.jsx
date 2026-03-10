@@ -246,6 +246,12 @@ const Signin = () => {
             <InputField type="text" name="email" placeholder="Email" formik={formik} />
             <InputField type="password" name="password" placeholder="Password" formik={formik} />
 
+            <div className='text-right'>
+              <Link to='/forgot-password' className='text-sm text-amber-700 hover:text-amber-900 font-medium'>
+                Forgot Password?
+              </Link>
+            </div>
+
             <button
               type='submit'
               className='bg-amber-700 text-white py-3 rounded-xl font-bold shadow-lg shadow-amber-200/60 hover:bg-amber-800 transition disabled:opacity-50 disabled:cursor-not-allowed'

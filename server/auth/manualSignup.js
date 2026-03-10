@@ -16,21 +16,15 @@ const manualSignup = (req, res) => {
     newUser.save()
         .then(() => {
 
-            console.log("Customer Resgistered Succesfully");
 
-            // Transporter means the informarion about the service you are using to send the email
             let transporter = nodemailer.createTransport({
                 service: 'gmail',
                 auth: {
                     user: 'oladoyeajiboye@gmail.com',
-                    // a special password generated from google settings not your original password
-                    // Step one: Enable 2-step verification
-                    // Step two: Generate app password
                     pass: process.env.GOOGLE_APP_PASSWORD
                 }
             });
 
-            // This is the information about the email you are sending
             let mailOptions = {
                 from: `"AuthSys Team" <${process.env.USER}>`,
                 to: [user.email],
@@ -135,7 +129,6 @@ const manualSignup = (req, res) => {
                     </html>
                 `
             };
-            // This is what will actually send the email
             transporter.sendMail(mailOptions, function (error, info) {
                 if (error) {
                     console.log(error);
@@ -146,7 +139,6 @@ const manualSignup = (req, res) => {
         })
         .catch((err) => {
             console.error("Error registering customer:", err);
-            // res.status(500).send("Internal server error");
         });
 
     console.log('Password signup', user)

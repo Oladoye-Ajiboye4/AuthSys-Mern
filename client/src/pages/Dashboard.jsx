@@ -26,7 +26,6 @@ const Dashboard = () => {
     })
       .then((result) => {
         if (result.status === 200) {
-          console.log(result.data);
           setUser(result.data.user);
           setLoading(false);
           notify();

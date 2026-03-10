@@ -4,6 +4,8 @@ const handleSignin = require('./auth/signin')
 const manualSignup = require('./auth/manualSignup')
 const manualSignin = require('./auth/manualSignin')
 const getDashboard = require('./auth/getDashboard')
+const forgotPassword = require('./auth/forgotPassword')
+const resetPassword = require('./auth/resetPassword')
 const express = require('express')
 require('dotenv').config()
 
@@ -19,6 +21,8 @@ app.post('/handle-signup', handleSignup)
 app.post('/handle-signin', handleSignin)
 app.post('/manual-signup', manualSignup)
 app.post('/manual-signin', manualSignin)
+app.post('/forgot-password', forgotPassword)
+app.post('/reset-password', resetPassword)
 app.get('/getDashboard', getDashboard)
 
 app.listen(PORT, () => {

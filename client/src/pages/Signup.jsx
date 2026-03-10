@@ -172,7 +172,6 @@ const Signup = () => {
           .then((result) => {
             if (result.status === 201) {
               const token = result.data.user.token;
-              console.log('GitHub login successful, token:', token);
               if (token) {
                 localStorage.setItem('token', token);
               }
