@@ -8,7 +8,7 @@ import { Icon } from '@iconify/react';
 import axios from 'axios';
 
 const ForgotPassword = () => {
-    const forgotPasswordUrl = 'http://localhost:7890/forgot-password';
+    const forgotPasswordUrl = `${import.meta.env.VITE_BASE_URL}forgot-password`;
     const [isSubmitted, setIsSubmitted] = useState(false);
     const navigate = useNavigate();
 

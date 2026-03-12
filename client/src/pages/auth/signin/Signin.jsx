@@ -12,8 +12,8 @@ import { initializeApp } from "firebase/app"
 import { getAuth, signInWithPopup, GoogleAuthProvider, GithubAuthProvider } from "firebase/auth"
 
 const Signin = () => {
-  const signinUrl = 'http://localhost:7890/handle-signin'
-  const manualSigninUrl = 'http://localhost:7890/manual-signin'
+  const signinUrl = `${import.meta.env.VITE_BASE_URL}handle-signin`
+  const manualSigninUrl = `${import.meta.env.VITE_BASE_URL}manual-signin`
 
   const navigate = useNavigate();
 
@@ -103,7 +103,7 @@ const Signin = () => {
         const token = credential.accessToken;
         // The signed-in user info.
         const user = result.user;
-        const userData = { username: user.displayName, email: user.email, token, provider: 'github' }
+        const userData = { username: user.displayName, email: user.email, token, provider: 'google' }
 
 
         axios.post(signinUrl, userData)

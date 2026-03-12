@@ -16,7 +16,7 @@ const getDashboard = (req, res) => {
         return res.status(401).json({ status: false, message: "Token is missing" })
     }
 
-    jwt.verify(token, "secretkey", (err, result) => {
+    jwt.verify(token, process.env.JWT_SECRET, (err, result) => {
         if (err) {
             console.log(err);
             return res.status(401).json({ status: false, message: "Token is expired or invalid" })

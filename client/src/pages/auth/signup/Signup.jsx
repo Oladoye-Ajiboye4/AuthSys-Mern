@@ -12,8 +12,8 @@ import { initializeApp } from "firebase/app"
 import { getAuth, signInWithPopup, GoogleAuthProvider, GithubAuthProvider } from "firebase/auth"
 
 const Signup = () => {
-  const signupUrl = 'http://localhost:7890/handle-signup'
-  const manualSignupUrl = 'http://localhost:7890/manual-signup'
+  const signupUrl = `${import.meta.env.VITE_BASE_URL}handle-signup`
+  const manualSignupUrl = `${import.meta.env.VITE_BASE_URL}manual-signup`
 
 
   const navigate = useNavigate();

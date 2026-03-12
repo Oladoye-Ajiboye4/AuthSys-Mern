@@ -8,7 +8,7 @@ import { Icon } from '@iconify/react';
 import axios from 'axios';
 
 const ResetPassword = () => {
-    const resetPasswordUrl = 'http://localhost:7890/reset-password';
+    const resetPasswordUrl = `${import.meta.env.VITE_BASE_URL}reset-password`;
     const [searchParams] = useSearchParams();
     const [isSubmitted, setIsSubmitted] = useState(false);
     const [tokenValid, setTokenValid] = useState(true);
