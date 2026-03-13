@@ -150,8 +150,17 @@ const Dashboard = () => {
     setTimeout(() => navigate('/signin'), 1000)
   }
 
-  const handleNavItemClick = () => {
+  const handleNavItemClick = (item) => {
     setMobileSidebarOpen(false)
+
+    if (item?.id === 'create-eventdp') {
+      navigate('/create-eventdp')
+      return
+    }
+
+    if (item?.id === 'dashboard') {
+      navigate('/dashboard')
+    }
   }
 
   if (loading) {
@@ -282,7 +291,10 @@ const Dashboard = () => {
                 </div>
 
                 <div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
-                  <article className='rounded-2xl border border-dashed border-forest-green/50 bg-pale-sage p-5 text-center hover:bg-white hover:-translate-y-1 transition-all duration-300'>
+                  <article
+                    onClick={() => navigate('/create-eventdp')}
+                    className='rounded-2xl border border-dashed border-forest-green/50 bg-pale-sage p-5 text-center hover:bg-white hover:-translate-y-1 transition-all duration-300 cursor-pointer'
+                  >
                     <div className='h-16 w-16 mx-auto rounded-full bg-forest-green/20 flex items-center justify-center text-forest-green mb-4 animate-bounce-slow'>
                       <Icon icon='mdi:plus' width='31' height='31' />
                     </div>

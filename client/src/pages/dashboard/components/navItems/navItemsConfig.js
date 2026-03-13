@@ -6,24 +6,9 @@ export const primaryNavItems = [
         active: true,
     },
     {
-        id: 'my-events',
-        label: 'My Events',
-        icon: 'mdi:calendar-blank-outline',
-    },
-    {
-        id: 'templates',
-        label: 'Templates',
-        icon: 'mdi:shape-outline',
-    },
-    {
-        id: 'analytics',
-        label: 'Analytics',
-        icon: 'mdi:chart-line',
-    },
-    {
-        id: 'attendees',
-        label: 'Attendees',
-        icon: 'mdi:account-group-outline',
+        id: 'create-eventdp',
+        label: 'Create EventDP',
+        icon: 'mdi:palette-outline',
     },
 ]
 

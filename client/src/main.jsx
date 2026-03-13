@@ -10,6 +10,7 @@ import Signin from "./pages/auth/signin/Signin.jsx";
 import Dashboard from "./pages/dashboard/Dashboard.jsx";
 import ForgotPassword from "./pages/auth/forgotPassword/ForgotPassword.jsx";
 import ResetPassword from "./pages/auth/resetPassword/ResetPassword.jsx";
+import CreateEventDP from "./pages/create_EventDP/CreateEventDP.jsx";
 
 
 const router = createBrowserRouter([
@@ -28,6 +29,10 @@ const router = createBrowserRouter([
   {
     path: "/dashboard",
     element: <Dashboard />,
+  },
+  {
+    path: "/create-eventdp",
+    element: <CreateEventDP />,
   },
   {
     path: "/forgot-password",
