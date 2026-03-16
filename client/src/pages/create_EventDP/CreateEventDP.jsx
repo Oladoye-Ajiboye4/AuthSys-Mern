@@ -21,18 +21,19 @@ const CreateEventDP = () => {
         committedZone,
         handleZoneCommit,
         clearCommittedZone,
-        textZone,
+        textZones,
+        activeTextZoneIndex,
+        selectedTextZone,
         handleTextZoneCommit,
         clearTextZone,
+        addTextZone,
+        selectTextZone,
+        maxTextZones,
         canvasDimensions,
-        bleedGuides,
-        toggleBleedGuides,
         backgroundOpacity,
         setOpacity,
         cornerRadius,
         setRadius,
-        borderStyle,
-        changeBorderStyle,
         snapToGrid,
         toggleSnapToGrid,
         allowGuestText,
@@ -57,7 +58,7 @@ const CreateEventDP = () => {
 
     return (
         <main className='h-screen bg-pale-sage flex flex-col overflow-hidden'>
-            <TopNav />
+            <TopNav showGenerateLink={Boolean(uploadedImage)} />
 
             <div className='flex flex-1 overflow-hidden relative'>
                 <StudioSidebar activeMenu={activeMenu} onMenuChange={setActiveMenu} />
@@ -140,7 +141,9 @@ const CreateEventDP = () => {
                         committedZone={committedZone}
                         onZoneCommit={handleZoneCommit}
                         onClearZone={clearCommittedZone}
-                        textZone={textZone}
+                        textZones={textZones}
+                        activeTextZoneIndex={activeTextZoneIndex}
+                        selectedTextZone={selectedTextZone}
                         onTextZoneCommit={handleTextZoneCommit}
                         onClearTextZone={clearTextZone}
                         allowGuestText={allowGuestText}
@@ -149,32 +152,30 @@ const CreateEventDP = () => {
                     />
                 </section>
 
-                <SettingsPanel
-                    zoneShapes={zoneShapes}
-                    zoneShape={zoneShape}
-                    onSelectZoneShape={selectZoneShape}
-                    committedZone={committedZone}
-                    onClearZone={clearCommittedZone}
-                    canvasDimensions={canvasDimensions}
-                    bleedGuides={bleedGuides}
-                    onToggleBleed={toggleBleedGuides}
-                    backgroundOpacity={backgroundOpacity}
-                    onOpacityChange={setOpacity}
-                    cornerRadius={cornerRadius}
-                    onRadiusChange={setRadius}
-                    borderStyle={borderStyle}
-                    onBorderStyleChange={changeBorderStyle}
-                    snapToGrid={snapToGrid}
-                    onToggleSnap={toggleSnapToGrid}
-                    allowGuestText={allowGuestText}
-                    onToggleGuestText={toggleGuestText}
-                    activeCanvasTool={activeCanvasTool}
-                    onSelectCanvasTool={selectCanvasTool}
-                    textZone={textZone}
-                    onClearTextZone={clearTextZone}
-                    guestTextStyle={guestTextStyle}
-                    onGuestTextStyleChange={updateGuestTextStyle}
-                />
+                {uploadedImage && (
+                    <SettingsPanel
+                        zoneShapes={zoneShapes}
+                        zoneShape={zoneShape}
+                        onSelectZoneShape={selectZoneShape}
+                        committedZone={committedZone}
+                        onClearZone={clearCommittedZone}
+                        canvasDimensions={canvasDimensions}
+                        cornerRadius={cornerRadius}
+                        onRadiusChange={setRadius}
+                        allowGuestText={allowGuestText}
+                        onToggleGuestText={toggleGuestText}
+                        activeCanvasTool={activeCanvasTool}
+                        onSelectCanvasTool={selectCanvasTool}
+                        textZones={textZones}
+                        activeTextZoneIndex={activeTextZoneIndex}
+                        onSelectTextZone={selectTextZone}
+                        onAddTextZone={addTextZone}
+                        maxTextZones={maxTextZones}
+                        onClearTextZone={clearTextZone}
+                        guestTextStyle={guestTextStyle}
+                        onGuestTextStyleChange={updateGuestTextStyle}
+                    />
+                )}
 
                 <MobileControlsPanel
                     zoneShape={zoneShape}

@@ -1,6 +1,5 @@
 import React from 'react'
 import { Icon } from '@iconify/react'
-import { BORDER_STYLES } from '../constants'
 
 const TEXT_FONT_OPTIONS = [
     'Poppins',
@@ -32,23 +31,18 @@ const SettingsPanel = ({
     onClearZone,
     // canvas info
     canvasDimensions,
-    // frame settings
-    bleedGuides,
-    onToggleBleed,
-    backgroundOpacity,
-    onOpacityChange,
     cornerRadius,
     onRadiusChange,
-    borderStyle,
-    onBorderStyleChange,
-    snapToGrid,
-    onToggleSnap,
     // guest text
     allowGuestText,
     onToggleGuestText,
     activeCanvasTool,
     onSelectCanvasTool,
-    textZone,
+    textZones,
+    activeTextZoneIndex,
+    onSelectTextZone,
+    onAddTextZone,
+    maxTextZones,
     onClearTextZone,
     guestTextStyle,
     onGuestTextStyleChange,
@@ -137,82 +131,8 @@ const SettingsPanel = ({
                 </div>
             </div>
 
-            {/* ── Bleed & Guides ──────────────────────────────────────────── */}
-            <div className='p-6 border-b border-dusty-green/15 space-y-5'>
-                <div className='flex items-center justify-between'>
-                    <label className='text-xs font-bold text-dark-slate uppercase tracking-wider'>Bleed & Guides</label>
-                    <button
-                        type='button'
-                        onClick={onToggleBleed}
-                        aria-pressed={bleedGuides}
-                        className={`inline-flex items-center gap-1.5 px-2.5 h-8 rounded-full border text-[10px] font-bold tracking-wide uppercase transition-colors ${bleedGuides
-                            ? 'bg-forest-green text-white border-forest-green'
-                            : 'bg-white text-dark-slate/70 border-dusty-green/35 hover:bg-pale-sage'}`}
-                    >
-                        <Icon icon={bleedGuides ? 'mdi:check-circle' : 'mdi:close-circle-outline'} width='14' height='14' />
-                        <span>{bleedGuides ? 'On' : 'Off'}</span>
-                    </button>
-                </div>
-
-                <div className='space-y-3'>
-                    <div className='flex justify-between items-center text-[11px] text-dark-slate'>
-                        <span>Background Opacity</span>
-                        <span className='font-bold'>{backgroundOpacity}%</span>
-                    </div>
-                    <input
-                        type='range'
-                        min='25'
-                        max='100'
-                        value={backgroundOpacity}
-                        onChange={(event) => onOpacityChange(Number(event.target.value))}
-                        className='w-full accent-forest-green h-1.5'
-                    />
-                </div>
-            </div>
-
-            {/* ── Media Zone Parameters ───────────────────────────────────── */}
-            <div className='p-6 border-b border-dusty-green/15 space-y-4'>
-                <label className='text-xs font-bold text-dark-slate uppercase tracking-wider'>Media Zone Parameters</label>
-
-                <div className='space-y-3 pt-2'>
-                    <span className='text-[11px] text-dark-slate/70 font-medium'>Border Style</span>
-                    <div className='flex gap-2'>
-                        {BORDER_STYLES.map((style) => {
-                            const isActive = borderStyle === style.id
-                            return (
-                                <button
-                                    key={style.id}
-                                    type='button'
-                                    onClick={() => onBorderStyleChange(style.id)}
-                                    className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold transition-colors ${isActive
-                                        ? 'border-2 border-forest-green bg-forest-green/10 text-forest-green'
-                                        : 'border border-dusty-green/40 text-dark-slate/75'}`}
-                                >
-                                    {style.label}
-                                </button>
-                            )
-                        })}
-                    </div>
-                </div>
-
-                <div className='flex items-center justify-between pt-2'>
-                    <span className='text-[11px] text-dark-slate/70 font-medium'>Snap-to-Grid</span>
-                    <button
-                        type='button'
-                        onClick={onToggleSnap}
-                        aria-pressed={snapToGrid}
-                        className={`inline-flex items-center gap-1.5 px-2.5 h-8 rounded-full border text-[10px] font-bold tracking-wide uppercase transition-colors ${snapToGrid
-                            ? 'bg-forest-green text-white border-forest-green'
-                            : 'bg-white text-dark-slate/70 border-dusty-green/35 hover:bg-pale-sage'}`}
-                    >
-                        <Icon icon={snapToGrid ? 'mdi:grid' : 'mdi:grid-off'} width='14' height='14' />
-                        <span>{snapToGrid ? 'On' : 'Off'}</span>
-                    </button>
-                </div>
-            </div>
-
             {/* ── Guest Custom Text ─────────────────────────────────────── */}
-            <div className='p-6 space-y-4'>
+            <div className='p-6 border-t border-dusty-green/15 space-y-4'>
                 <div className='flex items-start justify-between gap-3'>
                     <div>
                         <label className='text-xs font-bold text-dark-slate uppercase tracking-wider'>Guest Custom Text</label>
@@ -235,6 +155,46 @@ const SettingsPanel = ({
 
                 {allowGuestText && (
                     <>
+                        <div className='space-y-2'>
+                            <div className='flex items-center justify-between'>
+                                <span className='text-[11px] text-dark-slate/70 font-medium'>Text Areas</span>
+                                <button
+                                    type='button'
+                                    onClick={onAddTextZone}
+                                    disabled={textZones.length >= maxTextZones}
+                                    className='inline-flex items-center gap-1 rounded-lg px-2.5 h-8 text-[10px] font-bold uppercase tracking-wide bg-dark-slate text-white disabled:opacity-35 disabled:cursor-not-allowed'
+                                >
+                                    <Icon icon='mdi:plus' width='14' height='14' />
+                                    Add Area
+                                </button>
+                            </div>
+                            <div className='grid grid-cols-2 gap-2'>
+                                {[0, 1].map((slotIndex) => {
+                                    const exists = slotIndex < textZones.length
+                                    const isSelected = activeTextZoneIndex === slotIndex
+
+                                    return (
+                                        <button
+                                            key={`text-slot-${slotIndex}`}
+                                            type='button'
+                                            disabled={!exists}
+                                            onClick={() => onSelectTextZone(slotIndex)}
+                                            className={`h-9 rounded-lg border text-[10px] font-bold uppercase tracking-wide ${isSelected
+                                                ? 'border-2 border-forest-green bg-forest-green/10 text-forest-green'
+                                                : exists
+                                                    ? 'border-dusty-green/40 text-dark-slate/75 hover:bg-pale-sage'
+                                                    : 'border-dusty-green/20 text-dark-slate/35 bg-pale-sage/45 cursor-not-allowed'}`}
+                                        >
+                                            {exists ? `Text Area ${slotIndex + 1}` : `Slot ${slotIndex + 1} Empty`}
+                                        </button>
+                                    )
+                                })}
+                            </div>
+                            <p className='text-[10px] text-dark-slate/55'>
+                                Maximum of {maxTextZones} text areas.
+                            </p>
+                        </div>
+
                         <div className='space-y-2'>
                             <span className='text-[11px] text-dark-slate/70 font-medium'>Canvas Target</span>
                             <div className='grid grid-cols-2 gap-2'>
@@ -264,13 +224,13 @@ const SettingsPanel = ({
                             </p>
                         </div>
 
-                        {textZone && (
+                        {Number.isInteger(activeTextZoneIndex) && (
                             <button
                                 type='button'
-                                onClick={onClearTextZone}
+                                onClick={() => onClearTextZone(activeTextZoneIndex)}
                                 className='text-[11px] text-dark-slate/65 underline hover:text-dark-slate'
                             >
-                                Clear text zone
+                                Clear selected text area
                             </button>
                         )}
 

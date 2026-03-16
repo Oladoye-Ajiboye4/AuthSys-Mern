@@ -11,7 +11,8 @@ const createSnapshot = (state) => ({
     borderStyle: state.borderStyle,
     snapToGrid: state.snapToGrid,
     allowGuestText: state.allowGuestText,
-    textZone: state.textZone,
+    textZones: state.textZones,
+    activeTextZoneIndex: state.activeTextZoneIndex,
     activeCanvasTool: state.activeCanvasTool,
     guestTextStyle: state.guestTextStyle,
     zoom: state.zoom,
@@ -27,6 +28,8 @@ const DEFAULT_GUEST_TEXT_STYLE = {
     fontWeight: 700,
     textAlign: 'center',
 }
+
+const MAX_TEXT_ZONES = 2
 
 const normalizeTextStyle = (style) => {
     const next = { ...style }
@@ -57,7 +60,8 @@ const useCreateEventDPState = () => {
     const [uploadedImage, setUploadedImage] = useState(null)
     const [zoneShape, setZoneShape] = useState('square')
     const [committedZone, setCommittedZone] = useState(null)
-    const [textZone, setTextZone] = useState(null)
+    const [textZones, setTextZones] = useState([])
+    const [activeTextZoneIndex, setActiveTextZoneIndex] = useState(null)
     const [bleedGuides, setBleedGuides] = useState(true)
     const [backgroundOpacity, setBackgroundOpacity] = useState(85)
     const [cornerRadius, setCornerRadius] = useState(16)
@@ -84,7 +88,8 @@ const useCreateEventDPState = () => {
         borderStyle,
         snapToGrid,
         allowGuestText,
-        textZone,
+        textZones,
+        activeTextZoneIndex,
         activeCanvasTool,
         guestTextStyle,
         zoom,
@@ -117,7 +122,8 @@ const useCreateEventDPState = () => {
             borderStyle,
             snapToGrid,
             allowGuestText,
-            textZone,
+            textZones,
+            activeTextZoneIndex,
             activeCanvasTool,
             guestTextStyle,
             zoom,
@@ -136,15 +142,52 @@ const useCreateEventDPState = () => {
     }
 
     const handleTextZoneCommit = (zone) => {
-        setTextZone(zone)
+        const hasActiveZone = Number.isInteger(activeTextZoneIndex)
+            && activeTextZoneIndex >= 0
+            && activeTextZoneIndex < textZones.length
+
+        let nextZones = textZones
+        let nextActiveIndex = activeTextZoneIndex
+
+        if (hasActiveZone) {
+            nextZones = textZones.map((item, index) => (
+                index === activeTextZoneIndex ? zone : item
+            ))
+        } else if (textZones.length < MAX_TEXT_ZONES) {
+            nextZones = [...textZones, zone]
+            nextActiveIndex = nextZones.length - 1
+        } else {
+            return
+        }
+
+        setTextZones(nextZones)
+        setActiveTextZoneIndex(nextActiveIndex)
+        persistSnapshot({
+            textZones: nextZones,
+            activeTextZoneIndex: nextActiveIndex,
+        })
     }
 
     const clearCommittedZone = () => {
         setCommittedZone(null)
     }
 
-    const clearTextZone = () => {
-        setTextZone(null)
+    const clearTextZone = (zoneIndex = activeTextZoneIndex) => {
+        if (!Number.isInteger(zoneIndex) || zoneIndex < 0 || zoneIndex >= textZones.length) {
+            return
+        }
+
+        const nextZones = textZones.filter((_, index) => index !== zoneIndex)
+        const nextActiveIndex = nextZones.length === 0
+            ? null
+            : Math.min(zoneIndex, nextZones.length - 1)
+
+        setTextZones(nextZones)
+        setActiveTextZoneIndex(nextActiveIndex)
+        persistSnapshot({
+            textZones: nextZones,
+            activeTextZoneIndex: nextActiveIndex,
+        })
     }
 
     const setOpacity = (value) => {
@@ -193,25 +236,63 @@ const useCreateEventDPState = () => {
     const toggleGuestText = () => {
         const next = !allowGuestText
         const nextTool = next ? activeCanvasTool : 'photo'
-        const nextTextZone = next ? textZone : null
+        const nextTextZones = next ? textZones : []
+        const nextActiveTextZoneIndex = next ? activeTextZoneIndex : null
 
         setAllowGuestText(next)
         setActiveCanvasTool(nextTool)
         if (!next) {
-            setTextZone(null)
+            setTextZones([])
+            setActiveTextZoneIndex(null)
         }
 
         persistSnapshot({
             allowGuestText: next,
             activeCanvasTool: nextTool,
-            textZone: nextTextZone,
+            textZones: nextTextZones,
+            activeTextZoneIndex: nextActiveTextZoneIndex,
+        })
+    }
+
+    const addTextZone = () => {
+        if (textZones.length >= MAX_TEXT_ZONES) {
+            return
+        }
+
+        const nextActiveIndex = textZones.length
+        setActiveCanvasTool('text')
+        setActiveTextZoneIndex(nextActiveIndex)
+        persistSnapshot({
+            activeCanvasTool: 'text',
+            activeTextZoneIndex: nextActiveIndex,
+        })
+    }
+
+    const selectTextZone = (zoneIndex) => {
+        if (!Number.isInteger(zoneIndex) || zoneIndex < 0 || zoneIndex >= textZones.length) {
+            return
+        }
+
+        setActiveTextZoneIndex(zoneIndex)
+        setActiveCanvasTool('text')
+        persistSnapshot({
+            activeTextZoneIndex: zoneIndex,
+            activeCanvasTool: 'text',
         })
     }
 
     const selectCanvasTool = (tool) => {
         const normalized = tool === 'text' && allowGuestText ? 'text' : 'photo'
+        const nextActiveTextZoneIndex = normalized === 'photo'
+            ? activeTextZoneIndex
+            : (Number.isInteger(activeTextZoneIndex) ? activeTextZoneIndex : (textZones.length > 0 ? 0 : null))
+
         setActiveCanvasTool(normalized)
-        persistSnapshot({ activeCanvasTool: normalized })
+        setActiveTextZoneIndex(nextActiveTextZoneIndex)
+        persistSnapshot({
+            activeCanvasTool: normalized,
+            activeTextZoneIndex: nextActiveTextZoneIndex,
+        })
     }
 
     const updateGuestTextStyle = (updates) => {
@@ -234,7 +315,15 @@ const useCreateEventDPState = () => {
         setBorderStyle(snapshot.borderStyle)
         setSnapToGrid(snapshot.snapToGrid)
         setAllowGuestText(Boolean(snapshot.allowGuestText))
-        setTextZone(snapshot.textZone || null)
+        const snapshotTextZones = Array.isArray(snapshot.textZones)
+            ? snapshot.textZones.slice(0, MAX_TEXT_ZONES)
+            : []
+        const hasSnapshotActiveIndex = Number.isInteger(snapshot.activeTextZoneIndex)
+            && snapshot.activeTextZoneIndex >= 0
+            && snapshot.activeTextZoneIndex < snapshotTextZones.length
+
+        setTextZones(snapshotTextZones)
+        setActiveTextZoneIndex(hasSnapshotActiveIndex ? snapshot.activeTextZoneIndex : null)
         setActiveCanvasTool(snapshot.activeCanvasTool || 'photo')
         setGuestTextStyle(normalizeTextStyle(snapshot.guestTextStyle || DEFAULT_GUEST_TEXT_STYLE))
         setZoom(snapshot.zoom)
@@ -276,9 +365,14 @@ const useCreateEventDPState = () => {
         committedZone,
         handleZoneCommit,
         clearCommittedZone,
-        textZone,
+        textZones,
+        activeTextZoneIndex,
+        selectedTextZone: Number.isInteger(activeTextZoneIndex) ? textZones[activeTextZoneIndex] || null : null,
         handleTextZoneCommit,
         clearTextZone,
+        addTextZone,
+        selectTextZone,
+        maxTextZones: MAX_TEXT_ZONES,
         zoneShapes: ZONE_SHAPES,
         // frame settings
         bleedGuides,

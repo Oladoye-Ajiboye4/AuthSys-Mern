@@ -149,7 +149,9 @@ const CanvasStage = ({
     committedZone,
     onZoneCommit,
     onClearZone,
-    textZone,
+    textZones,
+    activeTextZoneIndex,
+    selectedTextZone,
     onTextZoneCommit,
     onClearTextZone,
     allowGuestText,
@@ -162,7 +164,7 @@ const CanvasStage = ({
 
     const { canvasRef, isInteracting, activeRect, pointerHandlers } = useZoneSelector({
         zoneShape: isTextTool ? 'square' : zoneShape,
-        committedZone: isTextTool ? textZone : committedZone,
+        committedZone: isTextTool ? selectedTextZone : committedZone,
         onZoneCommit: isTextTool ? onTextZoneCommit : onZoneCommit,
     })
 
@@ -174,7 +176,18 @@ const CanvasStage = ({
 
     const canDraw = !!uploadedImage && !previewMode && (activeCanvasTool === 'photo' || allowGuestText)
     const photoRect = isTextTool ? committedZone?.display || null : activeRect
-    const textRect = allowGuestText ? (isTextTool ? activeRect : textZone?.display || null) : null
+
+    const renderedTextZones = allowGuestText
+        ? textZones.map((zone, index) => {
+            if (!zone?.display) {
+                return { key: `text-zone-${index}`, rect: null, selected: false }
+            }
+
+            const isSelected = index === activeTextZoneIndex
+            const rect = (isTextTool && isSelected && activeRect) ? activeRect : zone.display
+            return { key: `text-zone-${index}`, rect, selected: isSelected }
+        })
+        : []
 
     return (
         <div className='flex-1 relative overflow-hidden'>
@@ -207,7 +220,7 @@ const CanvasStage = ({
                                 style={{ opacity: backgroundOpacity / 100 }}
                             />
                             {!previewMode && (
-                                <div className='absolute inset-0 bg-black/25 pointer-events-none mix-blend-multiply' />
+                                <div className={`absolute inset-0 pointer-events-none mix-blend-multiply transition-colors ${isInteracting ? 'bg-black/65' : 'bg-black/25'}`} />
                             )}
                         </>
                     ) : (
@@ -235,19 +248,22 @@ const CanvasStage = ({
                         />
                     )}
 
-                    {textRect && (
-                        <ZoneOverlay
-                            rect={textRect}
-                            kind='text'
-                            shape='square'
-                            cornerRadius={10}
-                            isInteracting={isTextTool && isInteracting}
-                            showHandles={!previewMode && isTextTool && !!textZone}
-                            previewMode={previewMode}
-                            interactive={!previewMode && isTextTool}
-                            textStyle={guestTextStyle}
-                        />
-                    )}
+                    {renderedTextZones.map((zone) => (
+                        zone.rect && (
+                            <ZoneOverlay
+                                key={zone.key}
+                                rect={zone.rect}
+                                kind='text'
+                                shape='square'
+                                cornerRadius={10}
+                                isInteracting={isTextTool && zone.selected && isInteracting}
+                                showHandles={!previewMode && isTextTool && zone.selected}
+                                previewMode={previewMode}
+                                interactive={!previewMode && isTextTool && zone.selected}
+                                textStyle={guestTextStyle}
+                            />
+                        )
+                    ))}
 
                     {/* Remove image button */}
                     {uploadedImage && !previewMode && (
@@ -263,11 +279,11 @@ const CanvasStage = ({
                     )}
 
                     {/* Clear zone button */}
-                    {!previewMode && isTextTool && textZone && (
+                    {!previewMode && isTextTool && Number.isInteger(activeTextZoneIndex) && (
                         <button
                             data-zone-control='true'
                             type='button'
-                            onClick={onClearTextZone}
+                            onClick={() => onClearTextZone(activeTextZoneIndex)}
                             className='absolute top-3 left-3 h-7 px-2 rounded-full bg-[#2d3857]/85 text-white text-[10px] font-semibold flex items-center gap-1 hover:bg-[#2d3857] transition-colors'
                             aria-label='Clear text zone'
                         >
@@ -295,8 +311,8 @@ const CanvasStage = ({
                             {canvasDimensions.width} × {canvasDimensions.height}px
                             {!isTextTool && canDraw && !committedZone && ' • drag to place photo zone'}
                             {!isTextTool && canDraw && committedZone && ' • drag to move, handles to resize'}
-                            {isTextTool && canDraw && !textZone && ' • drag to place text zone'}
-                            {isTextTool && canDraw && textZone && ' • drag to move text, handles to resize'}
+                            {isTextTool && canDraw && !selectedTextZone && ' • drag to place text zone'}
+                            {isTextTool && canDraw && selectedTextZone && ' • drag to move text, handles to resize'}
                         </div>
                     )}
                 </div>
@@ -317,7 +333,7 @@ const CanvasStage = ({
                 </div>
             )}
 
-            {canDraw && isTextTool && !textZone && (
+            {canDraw && isTextTool && !selectedTextZone && (
                 <div className='absolute bottom-4 left-1/2 -translate-x-1/2 bg-[#2d3857]/88 text-white text-xs font-medium px-4 py-2 rounded-full pointer-events-none animate-fade-in-up'>
                     Drag on the image to place the guest custom text area
                 </div>
