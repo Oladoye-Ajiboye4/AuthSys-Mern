@@ -14,11 +14,25 @@ const HANDLE_CONFIG = [
 ]
 
 // Renders selection zone and resize handles.
-const ZoneOverlay = ({ rect, shape, cornerRadius, isInteracting, showHandles }) => {
+const ZoneOverlay = ({
+    rect,
+    kind,
+    shape,
+    cornerRadius,
+    isInteracting,
+    showHandles,
+    previewMode,
+    interactive,
+    textStyle,
+}) => {
     if (!rect || rect.width < 2 || rect.height < 2) return null
 
-    const borderColor = isInteracting ? 'rgba(90,120,99,0.8)' : '#5A7863'
-    const fillColor = isInteracting ? 'rgba(90,120,99,0.17)' : 'rgba(90,120,99,0.13)'
+    const borderColor = kind === 'text'
+        ? (isInteracting ? 'rgba(70,85,119,0.9)' : '#465577')
+        : (isInteracting ? 'rgba(90,120,99,0.8)' : '#5A7863')
+    const fillColor = kind === 'text'
+        ? (isInteracting ? 'rgba(70,85,119,0.20)' : 'rgba(70,85,119,0.13)')
+        : (isInteracting ? 'rgba(90,120,99,0.17)' : 'rgba(90,120,99,0.13)')
 
     const style = {
         position: 'absolute',
@@ -28,9 +42,10 @@ const ZoneOverlay = ({ rect, shape, cornerRadius, isInteracting, showHandles }) 
         height: rect.height,
         border: `2px dashed ${borderColor}`,
         backgroundColor: fillColor,
-        pointerEvents: 'auto',
+        pointerEvents: interactive ? 'auto' : 'none',
         transition: isInteracting ? 'none' : 'all 0.2s ease',
-        cursor: 'move',
+        cursor: interactive ? 'move' : 'default',
+        overflow: 'hidden',
     }
 
     if (shape === 'circle') {
@@ -39,13 +54,81 @@ const ZoneOverlay = ({ rect, shape, cornerRadius, isInteracting, showHandles }) 
         style.borderRadius = `${cornerRadius}px`
     }
 
+    const isTinyZone = rect.width < 120 || rect.height < 100
+    const canShowUploadCue = previewMode && !isInteracting
+    const canShowTextCue = kind === 'text' && canShowUploadCue
+    const canShowPhotoCue = kind === 'photo' && canShowUploadCue
+
     return (
         <div style={style}>
+            {canShowPhotoCue && (
+                <div
+                    className='absolute inset-0 flex items-center justify-center pointer-events-none px-2'
+                    aria-hidden='true'
+                >
+                    <div
+                        className={`absolute inset-0 bg-linear-to-br from-dark-slate/70 via-dark-slate/62 to-dark-slate/76 ${shape === 'circle' ? 'rounded-full' : ''}`}
+                    />
+                    <div
+                        className={`relative inline-flex items-center gap-2 rounded-full border border-white/70 bg-dark-slate/72 text-white backdrop-blur-sm shadow-lg ${isTinyZone ? 'h-7 w-7 justify-center' : 'px-3 py-1.5'}`}
+                    >
+                        <Icon icon='mdi:image-plus-outline' width='14' height='14' />
+                        {!isTinyZone && <span className='text-[10px] font-semibold tracking-wide uppercase'>Guest Upload Area</span>}
+                    </div>
+                </div>
+            )}
+
+            {canShowTextCue && (
+                <div className='absolute inset-0 flex items-center justify-center pointer-events-none p-2' aria-hidden='true'>
+                    <div className='absolute inset-0 bg-linear-to-b from-[#2d3857]/78 to-[#2d3857]/66' />
+                    <div
+                        className='relative w-full text-center px-2 text-white/95'
+                        style={{
+                            fontFamily: textStyle.fontFamily,
+                            fontWeight: textStyle.fontWeight,
+                            fontSize: `${Math.max(12, Math.min(textStyle.fontSize * 0.52, rect.height * 0.35))}px`,
+                            lineHeight: textStyle.lineHeight,
+                            letterSpacing: `${Math.max(-1, Math.min(textStyle.letterSpacing, 3))}px`,
+                            textAlign: textStyle.textAlign,
+                            textShadow: '0 2px 10px rgba(0, 0, 0, 0.35)',
+                        }}
+                    >
+                        {textStyle.text || 'Guest custom text'}
+                    </div>
+                </div>
+            )}
+
+            {kind === 'text' && !previewMode && (
+                <>
+                    <div className='absolute inset-0 flex items-center justify-center pointer-events-none p-2'>
+                        <div
+                            className='w-full text-center wrap-break-word'
+                            style={{
+                                fontFamily: textStyle.fontFamily,
+                                fontWeight: textStyle.fontWeight,
+                                fontSize: `${Math.max(11, Math.min(textStyle.fontSize * 0.48, rect.height * 0.32))}px`,
+                                lineHeight: textStyle.lineHeight,
+                                letterSpacing: `${textStyle.letterSpacing}px`,
+                                textAlign: textStyle.textAlign,
+                                color: textStyle.color,
+                                opacity: 0.9,
+                                textShadow: '0 1px 5px rgba(0, 0, 0, 0.25)',
+                            }}
+                        >
+                            {textStyle.text || 'Add your custom message'}
+                        </div>
+                    </div>
+                    <div className='absolute top-2 left-2 rounded-full bg-[#2d3857]/85 text-white text-[10px] px-2 py-0.5 font-semibold tracking-wide pointer-events-none'>
+                        Text Zone
+                    </div>
+                </>
+            )}
+
             {showHandles && HANDLE_CONFIG.map((handle) => (
                 <span
                     key={handle.key}
                     data-resize-handle={handle.key}
-                    className={`absolute h-3 w-3 rounded-full bg-white border border-forest-green shadow ${handle.className}`}
+                    className={`absolute h-3 w-3 rounded-full bg-white border shadow ${kind === 'text' ? 'border-[#465577]' : 'border-forest-green'} ${handle.className}`}
                 />
             ))}
         </div>
@@ -66,13 +149,21 @@ const CanvasStage = ({
     committedZone,
     onZoneCommit,
     onClearZone,
+    textZone,
+    onTextZoneCommit,
+    onClearTextZone,
+    allowGuestText,
+    activeCanvasTool,
+    guestTextStyle,
 }) => {
     const fileInputRef = useRef(null)
 
+    const isTextTool = activeCanvasTool === 'text' && allowGuestText
+
     const { canvasRef, isInteracting, activeRect, pointerHandlers } = useZoneSelector({
-        zoneShape,
-        committedZone,
-        onZoneCommit,
+        zoneShape: isTextTool ? 'square' : zoneShape,
+        committedZone: isTextTool ? textZone : committedZone,
+        onZoneCommit: isTextTool ? onTextZoneCommit : onZoneCommit,
     })
 
     const handleFilePick = (event) => {
@@ -81,7 +172,9 @@ const CanvasStage = ({
         event.target.value = ''
     }
 
-    const canDraw = !!uploadedImage && !previewMode
+    const canDraw = !!uploadedImage && !previewMode && (activeCanvasTool === 'photo' || allowGuestText)
+    const photoRect = isTextTool ? committedZone?.display || null : activeRect
+    const textRect = allowGuestText ? (isTextTool ? activeRect : textZone?.display || null) : null
 
     return (
         <div className='flex-1 relative overflow-hidden'>
@@ -128,13 +221,31 @@ const CanvasStage = ({
                         </button>
                     )}
 
-                    {activeRect && (
+                    {photoRect && (
                         <ZoneOverlay
-                            rect={activeRect}
+                            rect={photoRect}
+                            kind='photo'
                             shape={zoneShape}
                             cornerRadius={cornerRadius}
-                            isInteracting={isInteracting}
-                            showHandles={!previewMode && !!committedZone}
+                            isInteracting={!isTextTool && isInteracting}
+                            showHandles={!previewMode && !isTextTool && !!committedZone}
+                            previewMode={previewMode}
+                            interactive={!previewMode && !isTextTool}
+                            textStyle={guestTextStyle}
+                        />
+                    )}
+
+                    {textRect && (
+                        <ZoneOverlay
+                            rect={textRect}
+                            kind='text'
+                            shape='square'
+                            cornerRadius={10}
+                            isInteracting={isTextTool && isInteracting}
+                            showHandles={!previewMode && isTextTool && !!textZone}
+                            previewMode={previewMode}
+                            interactive={!previewMode && isTextTool}
+                            textStyle={guestTextStyle}
                         />
                     )}
 
@@ -152,7 +263,20 @@ const CanvasStage = ({
                     )}
 
                     {/* Clear zone button */}
-                    {committedZone && !previewMode && (
+                    {!previewMode && isTextTool && textZone && (
+                        <button
+                            data-zone-control='true'
+                            type='button'
+                            onClick={onClearTextZone}
+                            className='absolute top-3 left-3 h-7 px-2 rounded-full bg-[#2d3857]/85 text-white text-[10px] font-semibold flex items-center gap-1 hover:bg-[#2d3857] transition-colors'
+                            aria-label='Clear text zone'
+                        >
+                            <Icon icon='mdi:format-textbox-remove-outline' width='13' height='13' />
+                            Clear text zone
+                        </button>
+                    )}
+
+                    {!previewMode && !isTextTool && committedZone && (
                         <button
                             data-zone-control='true'
                             type='button'
@@ -161,7 +285,7 @@ const CanvasStage = ({
                             aria-label='Clear zone'
                         >
                             <Icon icon='mdi:selection-remove' width='13' height='13' />
-                            Clear zone
+                            Clear photo zone
                         </button>
                     )}
 
@@ -169,8 +293,10 @@ const CanvasStage = ({
                     {!previewMode && (
                         <div className='absolute left-3 bottom-3 rounded-md bg-dark-slate/70 text-white text-[10px] px-2 py-1 tracking-wide pointer-events-none'>
                             {canvasDimensions.width} × {canvasDimensions.height}px
-                            {canDraw && !committedZone && ' • drag to place zone'}
-                            {canDraw && committedZone && ' • drag to move, handles to resize'}
+                            {!isTextTool && canDraw && !committedZone && ' • drag to place photo zone'}
+                            {!isTextTool && canDraw && committedZone && ' • drag to move, handles to resize'}
+                            {isTextTool && canDraw && !textZone && ' • drag to place text zone'}
+                            {isTextTool && canDraw && textZone && ' • drag to move text, handles to resize'}
                         </div>
                     )}
                 </div>
@@ -185,9 +311,15 @@ const CanvasStage = ({
             </div>
 
             {/* Draw-mode hint ribbon */}
-            {canDraw && !committedZone && (
+            {canDraw && !isTextTool && !committedZone && (
                 <div className='absolute bottom-4 left-1/2 -translate-x-1/2 bg-dark-slate/80 text-white text-xs font-medium px-4 py-2 rounded-full pointer-events-none animate-fade-in-up'>
                     Drag on the image to mark where guests upload their photo
+                </div>
+            )}
+
+            {canDraw && isTextTool && !textZone && (
+                <div className='absolute bottom-4 left-1/2 -translate-x-1/2 bg-[#2d3857]/88 text-white text-xs font-medium px-4 py-2 rounded-full pointer-events-none animate-fade-in-up'>
+                    Drag on the image to place the guest custom text area
                 </div>
             )}
         </div>

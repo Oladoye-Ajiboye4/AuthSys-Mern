@@ -2,6 +2,27 @@ import React from 'react'
 import { Icon } from '@iconify/react'
 import { BORDER_STYLES } from '../constants'
 
+const TEXT_FONT_OPTIONS = [
+    'Poppins',
+    'Playfair Display',
+    'Space Grotesk',
+    'Merriweather',
+    'Montserrat',
+]
+
+const TEXT_WEIGHT_OPTIONS = [
+    { value: 400, label: 'Regular' },
+    { value: 500, label: 'Medium' },
+    { value: 600, label: 'Semi Bold' },
+    { value: 700, label: 'Bold' },
+]
+
+const TEXT_ALIGN_OPTIONS = [
+    { value: 'left', icon: 'mdi:format-align-left' },
+    { value: 'center', icon: 'mdi:format-align-center' },
+    { value: 'right', icon: 'mdi:format-align-right' },
+]
+
 const SettingsPanel = ({
     // zone shape
     zoneShapes,
@@ -22,9 +43,15 @@ const SettingsPanel = ({
     onBorderStyleChange,
     snapToGrid,
     onToggleSnap,
-    // guest fields
-    guestFields,
-    onToggleGuestField,
+    // guest text
+    allowGuestText,
+    onToggleGuestText,
+    activeCanvasTool,
+    onSelectCanvasTool,
+    textZone,
+    onClearTextZone,
+    guestTextStyle,
+    onGuestTextStyleChange,
 }) => {
     const zoneEntries = Object.entries(zoneShapes)
 
@@ -117,9 +144,13 @@ const SettingsPanel = ({
                     <button
                         type='button'
                         onClick={onToggleBleed}
-                        className={`w-9 h-5 rounded-full relative transition-colors ${bleedGuides ? 'bg-forest-green' : 'bg-gray-300'}`}
+                        aria-pressed={bleedGuides}
+                        className={`inline-flex items-center gap-1.5 px-2.5 h-8 rounded-full border text-[10px] font-bold tracking-wide uppercase transition-colors ${bleedGuides
+                            ? 'bg-forest-green text-white border-forest-green'
+                            : 'bg-white text-dark-slate/70 border-dusty-green/35 hover:bg-pale-sage'}`}
                     >
-                        <span className={`absolute top-0.5 h-4 w-4 bg-white rounded-full transition-transform ${bleedGuides ? 'translate-x-4' : 'translate-x-0.5'}`}></span>
+                        <Icon icon={bleedGuides ? 'mdi:check-circle' : 'mdi:close-circle-outline'} width='14' height='14' />
+                        <span>{bleedGuides ? 'On' : 'Off'}</span>
                     </button>
                 </div>
 
@@ -169,33 +200,199 @@ const SettingsPanel = ({
                     <button
                         type='button'
                         onClick={onToggleSnap}
-                        className={`w-9 h-5 rounded-full relative transition-colors ${snapToGrid ? 'bg-forest-green' : 'bg-gray-300'}`}
+                        aria-pressed={snapToGrid}
+                        className={`inline-flex items-center gap-1.5 px-2.5 h-8 rounded-full border text-[10px] font-bold tracking-wide uppercase transition-colors ${snapToGrid
+                            ? 'bg-forest-green text-white border-forest-green'
+                            : 'bg-white text-dark-slate/70 border-dusty-green/35 hover:bg-pale-sage'}`}
                     >
-                        <span className={`absolute top-0.5 h-4 w-4 bg-white rounded-full transition-transform ${snapToGrid ? 'translate-x-4' : 'translate-x-0.5'}`}></span>
+                        <Icon icon={snapToGrid ? 'mdi:grid' : 'mdi:grid-off'} width='14' height='14' />
+                        <span>{snapToGrid ? 'On' : 'Off'}</span>
                     </button>
                 </div>
             </div>
 
-            {/* ── Guest Form Fields ───────────────────────────────────────── */}
+            {/* ── Guest Custom Text ─────────────────────────────────────── */}
             <div className='p-6 space-y-4'>
-                <label className='text-xs font-bold text-dark-slate uppercase tracking-wider'>Guest Form Fields</label>
-                <div className='space-y-2'>
-                    {guestFields.map((field) => (
-                        <div key={field.id} className='flex items-center justify-between p-3 bg-pale-sage rounded-xl border border-dusty-green/15'>
-                            <div className='flex items-center gap-3'>
-                                <Icon icon='mdi:drag-vertical' width='19' height='19' className='text-dark-slate/55' />
-                                <span className='text-sm font-medium text-dark-slate'>{field.label}</span>
+                <div className='flex items-start justify-between gap-3'>
+                    <div>
+                        <label className='text-xs font-bold text-dark-slate uppercase tracking-wider'>Guest Custom Text</label>
+                        <p className='text-[11px] text-dark-slate/55 mt-1'>
+                            Allow guests to add personalized text in a dedicated editable zone.
+                        </p>
+                    </div>
+                    <button
+                        type='button'
+                        onClick={onToggleGuestText}
+                        aria-pressed={allowGuestText}
+                        className={`inline-flex items-center gap-1.5 px-2.5 h-8 rounded-full border text-[10px] font-bold tracking-wide uppercase transition-colors ${allowGuestText
+                            ? 'bg-forest-green text-white border-forest-green'
+                            : 'bg-white text-dark-slate/70 border-dusty-green/35 hover:bg-pale-sage'}`}
+                    >
+                        <Icon icon={allowGuestText ? 'mdi:check-circle' : 'mdi:close-circle-outline'} width='14' height='14' />
+                        <span>{allowGuestText ? 'On' : 'Off'}</span>
+                    </button>
+                </div>
+
+                {allowGuestText && (
+                    <>
+                        <div className='space-y-2'>
+                            <span className='text-[11px] text-dark-slate/70 font-medium'>Canvas Target</span>
+                            <div className='grid grid-cols-2 gap-2'>
+                                <button
+                                    type='button'
+                                    onClick={() => onSelectCanvasTool('photo')}
+                                    className={`inline-flex items-center justify-center gap-1.5 h-9 rounded-lg border text-[11px] font-bold tracking-wide uppercase ${activeCanvasTool === 'photo'
+                                        ? 'border-2 border-forest-green bg-forest-green/10 text-forest-green'
+                                        : 'border-dusty-green/40 text-dark-slate/70 hover:bg-pale-sage'}`}
+                                >
+                                    <Icon icon='mdi:image-area' width='14' height='14' />
+                                    Photo Zone
+                                </button>
+                                <button
+                                    type='button'
+                                    onClick={() => onSelectCanvasTool('text')}
+                                    className={`inline-flex items-center justify-center gap-1.5 h-9 rounded-lg border text-[11px] font-bold tracking-wide uppercase ${activeCanvasTool === 'text'
+                                        ? 'border-2 border-forest-green bg-forest-green/10 text-forest-green'
+                                        : 'border-dusty-green/40 text-dark-slate/70 hover:bg-pale-sage'}`}
+                                >
+                                    <Icon icon='mdi:format-text-rotation-none' width='14' height='14' />
+                                    Text Zone
+                                </button>
                             </div>
+                            <p className='text-[10px] text-dark-slate/55'>
+                                Select Text Zone, then drag on canvas to place and resize where guest text will appear.
+                            </p>
+                        </div>
+
+                        {textZone && (
                             <button
                                 type='button'
-                                onClick={() => onToggleGuestField(field.id)}
-                                className={`w-9 h-5 rounded-full relative transition-colors ${field.enabled ? 'bg-forest-green' : 'bg-gray-300'}`}
+                                onClick={onClearTextZone}
+                                className='text-[11px] text-dark-slate/65 underline hover:text-dark-slate'
                             >
-                                <span className={`absolute top-0.5 h-4 w-4 bg-white rounded-full transition-transform ${field.enabled ? 'translate-x-4' : 'translate-x-0.5'}`}></span>
+                                Clear text zone
                             </button>
+                        )}
+
+                        <div className='space-y-2'>
+                            <span className='text-[11px] text-dark-slate/70 font-medium'>Default Guest Text</span>
+                            <textarea
+                                value={guestTextStyle.text}
+                                maxLength={90}
+                                onChange={(event) => onGuestTextStyleChange({ text: event.target.value.slice(0, 90) })}
+                                className='w-full rounded-xl border border-dusty-green/35 bg-pale-sage/50 px-3 py-2 text-xs text-dark-slate outline-none focus:border-forest-green'
+                                rows={3}
+                                placeholder='Type sample text shown in preview'
+                            />
                         </div>
-                    ))}
-                </div>
+
+                        <div className='grid grid-cols-2 gap-2'>
+                            <label className='space-y-1'>
+                                <span className='text-[10px] font-semibold text-dark-slate/65 uppercase'>Font</span>
+                                <select
+                                    value={guestTextStyle.fontFamily}
+                                    onChange={(event) => onGuestTextStyleChange({ fontFamily: event.target.value })}
+                                    className='w-full h-9 rounded-lg border border-dusty-green/35 bg-white px-2 text-xs text-dark-slate outline-none focus:border-forest-green'
+                                >
+                                    {TEXT_FONT_OPTIONS.map((font) => (
+                                        <option key={font} value={font}>{font}</option>
+                                    ))}
+                                </select>
+                            </label>
+                            <label className='space-y-1'>
+                                <span className='text-[10px] font-semibold text-dark-slate/65 uppercase'>Weight</span>
+                                <select
+                                    value={guestTextStyle.fontWeight}
+                                    onChange={(event) => onGuestTextStyleChange({ fontWeight: Number(event.target.value) })}
+                                    className='w-full h-9 rounded-lg border border-dusty-green/35 bg-white px-2 text-xs text-dark-slate outline-none focus:border-forest-green'
+                                >
+                                    {TEXT_WEIGHT_OPTIONS.map((weight) => (
+                                        <option key={weight.value} value={weight.value}>{weight.label}</option>
+                                    ))}
+                                </select>
+                            </label>
+                        </div>
+
+                        <div className='grid grid-cols-2 gap-3'>
+                            <div className='space-y-1'>
+                                <div className='flex items-center justify-between'>
+                                    <span className='text-[10px] font-semibold text-dark-slate/65 uppercase'>Size</span>
+                                    <span className='text-[10px] font-bold text-dark-slate'>{guestTextStyle.fontSize}px</span>
+                                </div>
+                                <input
+                                    type='range'
+                                    min='16'
+                                    max='72'
+                                    value={guestTextStyle.fontSize}
+                                    onChange={(event) => onGuestTextStyleChange({ fontSize: Number(event.target.value) })}
+                                    className='w-full accent-forest-green h-1.5'
+                                />
+                            </div>
+                            <div className='space-y-1'>
+                                <span className='text-[10px] font-semibold text-dark-slate/65 uppercase'>Color</span>
+                                <label className='h-9 rounded-lg border border-dusty-green/35 bg-white px-2 flex items-center gap-2'>
+                                    <input
+                                        type='color'
+                                        value={guestTextStyle.color}
+                                        onChange={(event) => onGuestTextStyleChange({ color: event.target.value })}
+                                        className='h-5 w-6 border-0 bg-transparent p-0'
+                                    />
+                                    <span className='text-[10px] font-mono text-dark-slate/75'>{guestTextStyle.color}</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div className='space-y-2'>
+                            <div className='flex items-center justify-between'>
+                                <span className='text-[10px] font-semibold text-dark-slate/65 uppercase'>Letter Spacing</span>
+                                <span className='text-[10px] font-bold text-dark-slate'>{guestTextStyle.letterSpacing}px</span>
+                            </div>
+                            <input
+                                type='range'
+                                min='-1'
+                                max='12'
+                                step='0.5'
+                                value={guestTextStyle.letterSpacing}
+                                onChange={(event) => onGuestTextStyleChange({ letterSpacing: Number(event.target.value) })}
+                                className='w-full accent-forest-green h-1.5'
+                            />
+                        </div>
+
+                        <div className='space-y-2'>
+                            <div className='flex items-center justify-between'>
+                                <span className='text-[10px] font-semibold text-dark-slate/65 uppercase'>Line Height</span>
+                                <span className='text-[10px] font-bold text-dark-slate'>{guestTextStyle.lineHeight.toFixed(2)}</span>
+                            </div>
+                            <input
+                                type='range'
+                                min='0.9'
+                                max='2'
+                                step='0.05'
+                                value={guestTextStyle.lineHeight}
+                                onChange={(event) => onGuestTextStyleChange({ lineHeight: Number(event.target.value) })}
+                                className='w-full accent-forest-green h-1.5'
+                            />
+                        </div>
+
+                        <div className='space-y-2'>
+                            <span className='text-[10px] font-semibold text-dark-slate/65 uppercase'>Text Align</span>
+                            <div className='grid grid-cols-3 gap-2'>
+                                {TEXT_ALIGN_OPTIONS.map((option) => (
+                                    <button
+                                        key={option.value}
+                                        type='button'
+                                        onClick={() => onGuestTextStyleChange({ textAlign: option.value })}
+                                        className={`h-9 rounded-lg border flex items-center justify-center ${guestTextStyle.textAlign === option.value
+                                            ? 'border-2 border-forest-green bg-forest-green/10 text-forest-green'
+                                            : 'border-dusty-green/40 text-dark-slate/70 hover:bg-pale-sage'}`}
+                                    >
+                                        <Icon icon={option.icon} width='16' height='16' />
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    </>
+                )}
             </div>
         </aside>
     )

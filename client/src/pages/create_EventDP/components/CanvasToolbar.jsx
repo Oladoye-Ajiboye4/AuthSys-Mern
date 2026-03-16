@@ -56,10 +56,23 @@ const CanvasToolbar = ({
             <button
                 type='button'
                 onClick={onTogglePreview}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${previewMode ? 'bg-dark-slate text-white' : 'bg-forest-green text-white hover:bg-dark-slate'}`}
+                aria-label={previewMode ? 'Switch to editing mode' : 'Switch to preview mode'}
+                className={`relative flex items-center rounded-xl p-1 border transition-all ${previewMode
+                    ? 'bg-dark-slate border-dark-slate text-white shadow-lg shadow-dark-slate/30'
+                    : 'bg-forest-green/10 border-forest-green/30 text-dark-slate'}`}
             >
-                <Icon icon='mdi:eye-outline' width='18' height='18' />
-                <span>{previewMode ? 'Editing' : 'Preview'}</span>
+                <span className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-bold tracking-wide uppercase transition-colors ${!previewMode
+                    ? 'bg-forest-green text-white'
+                    : 'text-white/70'}`}>
+                    <Icon icon='mdi:pencil-outline' width='15' height='15' />
+                    Edit
+                </span>
+                <span className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-bold tracking-wide uppercase transition-colors ${previewMode
+                    ? 'bg-white text-dark-slate'
+                    : 'text-dark-slate/65'}`}>
+                    <Icon icon='mdi:eye-outline' width='15' height='15' />
+                    Preview
+                </span>
             </button>
         </div>
     )

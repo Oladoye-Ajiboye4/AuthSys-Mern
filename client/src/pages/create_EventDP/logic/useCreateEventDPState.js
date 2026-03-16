@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { BORDER_STYLES, DEFAULT_GUEST_FIELDS } from '../constants'
+import { BORDER_STYLES } from '../constants'
 import { clamp, fitCanvasToViewport, ZONE_SHAPES } from './canvasMath'
 import useHistoryStack from './useHistoryStack'
 
@@ -10,20 +10,62 @@ const createSnapshot = (state) => ({
     cornerRadius: state.cornerRadius,
     borderStyle: state.borderStyle,
     snapToGrid: state.snapToGrid,
-    guestFields: state.guestFields,
+    allowGuestText: state.allowGuestText,
+    textZone: state.textZone,
+    activeCanvasTool: state.activeCanvasTool,
+    guestTextStyle: state.guestTextStyle,
     zoom: state.zoom,
 })
+
+const DEFAULT_GUEST_TEXT_STYLE = {
+    text: 'Add your custom message',
+    fontFamily: 'Poppins',
+    fontSize: 30,
+    color: '#FFFFFF',
+    letterSpacing: 0,
+    lineHeight: 1.25,
+    fontWeight: 700,
+    textAlign: 'center',
+}
+
+const normalizeTextStyle = (style) => {
+    const next = { ...style }
+    next.text = String(next.text || '').slice(0, 90)
+    next.fontSize = clamp(Number(next.fontSize) || DEFAULT_GUEST_TEXT_STYLE.fontSize, 16, 72)
+    next.letterSpacing = clamp(Number(next.letterSpacing) || 0, -1, 12)
+    next.lineHeight = clamp(Number(next.lineHeight) || DEFAULT_GUEST_TEXT_STYLE.lineHeight, 0.9, 2)
+
+    const allowedWeights = [400, 500, 600, 700]
+    const normalizedWeight = Number(next.fontWeight)
+    next.fontWeight = allowedWeights.includes(normalizedWeight)
+        ? normalizedWeight
+        : DEFAULT_GUEST_TEXT_STYLE.fontWeight
+
+    const allowedAlignments = ['left', 'center', 'right']
+    next.textAlign = allowedAlignments.includes(next.textAlign)
+        ? next.textAlign
+        : DEFAULT_GUEST_TEXT_STYLE.textAlign
+
+    if (!/^#([A-Fa-f0-9]{6})$/.test(String(next.color || ''))) {
+        next.color = DEFAULT_GUEST_TEXT_STYLE.color
+    }
+
+    return next
+}
 
 const useCreateEventDPState = () => {
     const [uploadedImage, setUploadedImage] = useState(null)
     const [zoneShape, setZoneShape] = useState('square')
     const [committedZone, setCommittedZone] = useState(null)
+    const [textZone, setTextZone] = useState(null)
     const [bleedGuides, setBleedGuides] = useState(true)
     const [backgroundOpacity, setBackgroundOpacity] = useState(85)
     const [cornerRadius, setCornerRadius] = useState(16)
     const [borderStyle, setBorderStyle] = useState(BORDER_STYLES[1].id)
     const [snapToGrid, setSnapToGrid] = useState(false)
-    const [guestFields, setGuestFields] = useState(DEFAULT_GUEST_FIELDS)
+    const [allowGuestText, setAllowGuestText] = useState(false)
+    const [activeCanvasTool, setActiveCanvasTool] = useState('photo')
+    const [guestTextStyle, setGuestTextStyle] = useState(DEFAULT_GUEST_TEXT_STYLE)
     const [previewMode, setPreviewMode] = useState(false)
     const [zoom, setZoom] = useState(1)
     const [activeMenu, setActiveMenu] = useState('template')
@@ -41,7 +83,10 @@ const useCreateEventDPState = () => {
         cornerRadius,
         borderStyle,
         snapToGrid,
-        guestFields,
+        allowGuestText,
+        textZone,
+        activeCanvasTool,
+        guestTextStyle,
         zoom,
     }))
 
@@ -71,7 +116,10 @@ const useCreateEventDPState = () => {
             cornerRadius,
             borderStyle,
             snapToGrid,
-            guestFields,
+            allowGuestText,
+            textZone,
+            activeCanvasTool,
+            guestTextStyle,
             zoom,
             ...overrides,
         }))
@@ -87,8 +135,16 @@ const useCreateEventDPState = () => {
         setCommittedZone(zone)
     }
 
+    const handleTextZoneCommit = (zone) => {
+        setTextZone(zone)
+    }
+
     const clearCommittedZone = () => {
         setCommittedZone(null)
+    }
+
+    const clearTextZone = () => {
+        setTextZone(null)
     }
 
     const setOpacity = (value) => {
@@ -134,19 +190,37 @@ const useCreateEventDPState = () => {
         setUploadedImage(null)
     }
 
-    const toggleGuestField = (fieldId) => {
-        const nextFields = guestFields.map((field) => {
-            if (field.id !== fieldId) {
-                return field
-            }
-            return {
-                ...field,
-                enabled: !field.enabled,
-            }
-        })
+    const toggleGuestText = () => {
+        const next = !allowGuestText
+        const nextTool = next ? activeCanvasTool : 'photo'
+        const nextTextZone = next ? textZone : null
 
-        setGuestFields(nextFields)
-        persistSnapshot({ guestFields: nextFields })
+        setAllowGuestText(next)
+        setActiveCanvasTool(nextTool)
+        if (!next) {
+            setTextZone(null)
+        }
+
+        persistSnapshot({
+            allowGuestText: next,
+            activeCanvasTool: nextTool,
+            textZone: nextTextZone,
+        })
+    }
+
+    const selectCanvasTool = (tool) => {
+        const normalized = tool === 'text' && allowGuestText ? 'text' : 'photo'
+        setActiveCanvasTool(normalized)
+        persistSnapshot({ activeCanvasTool: normalized })
+    }
+
+    const updateGuestTextStyle = (updates) => {
+        const nextStyle = normalizeTextStyle({
+            ...guestTextStyle,
+            ...updates,
+        })
+        setGuestTextStyle(nextStyle)
+        persistSnapshot({ guestTextStyle: nextStyle })
     }
 
     const restoreFromSnapshot = (snapshot) => {
@@ -159,7 +233,10 @@ const useCreateEventDPState = () => {
         setCornerRadius(snapshot.cornerRadius)
         setBorderStyle(snapshot.borderStyle)
         setSnapToGrid(snapshot.snapToGrid)
-        setGuestFields(snapshot.guestFields)
+        setAllowGuestText(Boolean(snapshot.allowGuestText))
+        setTextZone(snapshot.textZone || null)
+        setActiveCanvasTool(snapshot.activeCanvasTool || 'photo')
+        setGuestTextStyle(normalizeTextStyle(snapshot.guestTextStyle || DEFAULT_GUEST_TEXT_STYLE))
         setZoom(snapshot.zoom)
     }
 
@@ -199,6 +276,9 @@ const useCreateEventDPState = () => {
         committedZone,
         handleZoneCommit,
         clearCommittedZone,
+        textZone,
+        handleTextZoneCommit,
+        clearTextZone,
         zoneShapes: ZONE_SHAPES,
         // frame settings
         bleedGuides,
@@ -211,8 +291,12 @@ const useCreateEventDPState = () => {
         changeBorderStyle,
         snapToGrid,
         toggleSnapToGrid,
-        guestFields,
-        toggleGuestField,
+        allowGuestText,
+        toggleGuestText,
+        activeCanvasTool,
+        selectCanvasTool,
+        guestTextStyle,
+        updateGuestTextStyle,
         previewMode,
         setPreviewMode,
         zoom,

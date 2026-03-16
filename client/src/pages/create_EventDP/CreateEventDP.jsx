@@ -21,6 +21,9 @@ const CreateEventDP = () => {
         committedZone,
         handleZoneCommit,
         clearCommittedZone,
+        textZone,
+        handleTextZoneCommit,
+        clearTextZone,
         canvasDimensions,
         bleedGuides,
         toggleBleedGuides,
@@ -32,8 +35,12 @@ const CreateEventDP = () => {
         changeBorderStyle,
         snapToGrid,
         toggleSnapToGrid,
-        guestFields,
-        toggleGuestField,
+        allowGuestText,
+        toggleGuestText,
+        activeCanvasTool,
+        selectCanvasTool,
+        guestTextStyle,
+        updateGuestTextStyle,
         previewMode,
         setPreviewMode,
         zoom,
@@ -133,6 +140,12 @@ const CreateEventDP = () => {
                         committedZone={committedZone}
                         onZoneCommit={handleZoneCommit}
                         onClearZone={clearCommittedZone}
+                        textZone={textZone}
+                        onTextZoneCommit={handleTextZoneCommit}
+                        onClearTextZone={clearTextZone}
+                        allowGuestText={allowGuestText}
+                        activeCanvasTool={activeCanvasTool}
+                        guestTextStyle={guestTextStyle}
                     />
                 </section>
 
@@ -153,8 +166,14 @@ const CreateEventDP = () => {
                     onBorderStyleChange={changeBorderStyle}
                     snapToGrid={snapToGrid}
                     onToggleSnap={toggleSnapToGrid}
-                    guestFields={guestFields}
-                    onToggleGuestField={toggleGuestField}
+                    allowGuestText={allowGuestText}
+                    onToggleGuestText={toggleGuestText}
+                    activeCanvasTool={activeCanvasTool}
+                    onSelectCanvasTool={selectCanvasTool}
+                    textZone={textZone}
+                    onClearTextZone={clearTextZone}
+                    guestTextStyle={guestTextStyle}
+                    onGuestTextStyleChange={updateGuestTextStyle}
                 />
 
                 <MobileControlsPanel
