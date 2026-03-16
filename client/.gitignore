@@ -12,7 +12,7 @@ dist
 dist-ssr
 *.local
 .env
-
+/src/pages/create_EventDP/CREATE_EVENTDP_EXPLANATION.md
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
