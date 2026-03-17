@@ -11,6 +11,7 @@ const CanvasToolbar = ({
     onZoomOut,
     previewMode,
     onTogglePreview,
+    disabled,
 }) => {
     const zoomPercent = `${Math.round(zoom * 100)}%`
 
@@ -20,7 +21,7 @@ const CanvasToolbar = ({
                 <button
                     type='button'
                     onClick={onUndo}
-                    disabled={!canUndo}
+                    disabled={disabled || !canUndo}
                     className='p-2 text-dark-slate hover:bg-pale-sage rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed'
                 >
                     <Icon icon='mdi:undo' width='18' height='18' />
@@ -28,7 +29,7 @@ const CanvasToolbar = ({
                 <button
                     type='button'
                     onClick={onRedo}
-                    disabled={!canRedo}
+                    disabled={disabled || !canRedo}
                     className='p-2 text-dark-slate hover:bg-pale-sage rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed'
                 >
                     <Icon icon='mdi:redo' width='18' height='18' />
@@ -39,6 +40,7 @@ const CanvasToolbar = ({
                 <button
                     type='button'
                     onClick={onZoomIn}
+                    disabled={disabled}
                     className='p-2 text-dark-slate hover:bg-pale-sage rounded-lg transition-colors'
                 >
                     <Icon icon='mdi:magnify-plus-outline' width='18' height='18' />
@@ -47,6 +49,7 @@ const CanvasToolbar = ({
                 <button
                     type='button'
                     onClick={onZoomOut}
+                    disabled={disabled}
                     className='p-2 text-dark-slate hover:bg-pale-sage rounded-lg transition-colors'
                 >
                     <Icon icon='mdi:magnify-minus-outline' width='18' height='18' />
@@ -56,6 +59,7 @@ const CanvasToolbar = ({
             <button
                 type='button'
                 onClick={onTogglePreview}
+                disabled={disabled}
                 aria-label={previewMode ? 'Switch to editing mode' : 'Switch to preview mode'}
                 className={`relative flex items-center rounded-xl p-1 border transition-all ${previewMode
                     ? 'bg-dark-slate border-dark-slate text-white shadow-lg shadow-dark-slate/30'

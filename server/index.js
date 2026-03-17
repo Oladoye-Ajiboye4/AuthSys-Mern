@@ -11,6 +11,8 @@ const uploadImage = require('./pages/createEventDP/uploadImage')
 const createDraft = require('./pages/createEventDP/createDraft')
 const autosaveDraft = require('./pages/createEventDP/autosaveDraft')
 const getDraft = require('./pages/createEventDP/getDraft')
+const publishDraft = require('./pages/createEventDP/publishDraft')
+const getPublicEventDP = require('./pages/createEventDP/getPublicEventDP')
 const authUser = require('./middleware/authUser')
 
 const express = require('express')
@@ -38,7 +40,9 @@ app.get('/getDashboard', getDashboard)
 app.post('/createEventDP/upload-signature', authUser, uploadImage)
 app.post('/createEventDP/drafts', authUser, createDraft)
 app.patch('/createEventDP/drafts/:draftId/autosave', authUser, autosaveDraft)
+app.post('/createEventDP/drafts/:draftId/publish', authUser, publishDraft)
 app.get('/createEventDP/drafts/:draftId', authUser, getDraft)
+app.get('/createEventDP/public/:slug', getPublicEventDP)
 
 app.listen(PORT, () => {
     console.log(`Server listening on http://localhost:${PORT}`)

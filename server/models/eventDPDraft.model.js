@@ -12,6 +12,12 @@ const textZoneSchema = new mongoose.Schema({
     display: { type: zoneSchema, default: null },
 }, { _id: false })
 
+const historyEntrySchema = new mongoose.Schema({
+    action: { type: String, required: true },
+    at: { type: Date, default: Date.now },
+    meta: { type: Object, default: {} },
+}, { _id: false })
+
 const eventDPDraftSchema = new mongoose.Schema({
     userEmail: { type: String, required: true, index: true },
     status: { type: String, enum: ['draft', 'published'], default: 'draft' },
@@ -43,6 +49,12 @@ const eventDPDraftSchema = new mongoose.Schema({
         zoom: { type: Number, default: 1 },
         activeMenu: { type: String, default: 'template' },
     },
+    publish: {
+        slug: { type: String, default: '', index: true },
+        publicUrl: { type: String, default: '' },
+        publishedAt: { type: Date, default: null },
+    },
+    history: { type: [historyEntrySchema], default: [] },
     revision: { type: Number, default: 1 },
     lastClientEditAt: { type: Date, default: Date.now },
     lastServerSaveAt: { type: Date, default: Date.now },

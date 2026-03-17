@@ -157,6 +157,7 @@ const CanvasStage = ({
     allowGuestText,
     activeCanvasTool,
     guestTextStyle,
+    disabled,
 }) => {
     const fileInputRef = useRef(null)
 
@@ -174,7 +175,7 @@ const CanvasStage = ({
         event.target.value = ''
     }
 
-    const canDraw = !!uploadedImage && !previewMode && (activeCanvasTool === 'photo' || allowGuestText)
+    const canDraw = !!uploadedImage && !previewMode && !disabled && (activeCanvasTool === 'photo' || allowGuestText)
     const photoRect = isTextTool ? committedZone?.display || null : activeRect
 
     const renderedTextZones = allowGuestText
@@ -266,7 +267,7 @@ const CanvasStage = ({
                     ))}
 
                     {/* Remove image button */}
-                    {uploadedImage && !previewMode && (
+                    {uploadedImage && !previewMode && !disabled && (
                         <button
                             data-zone-control='true'
                             type='button'
@@ -279,7 +280,7 @@ const CanvasStage = ({
                     )}
 
                     {/* Clear zone button */}
-                    {!previewMode && isTextTool && Number.isInteger(activeTextZoneIndex) && (
+                    {!previewMode && !disabled && isTextTool && Number.isInteger(activeTextZoneIndex) && (
                         <button
                             data-zone-control='true'
                             type='button'
@@ -292,7 +293,7 @@ const CanvasStage = ({
                         </button>
                     )}
 
-                    {!previewMode && !isTextTool && committedZone && (
+                    {!previewMode && !disabled && !isTextTool && committedZone && (
                         <button
                             data-zone-control='true'
                             type='button'
@@ -309,6 +310,7 @@ const CanvasStage = ({
                     {!previewMode && (
                         <div className='absolute left-3 bottom-3 rounded-md bg-dark-slate/70 text-white text-[10px] px-2 py-1 tracking-wide pointer-events-none'>
                             {canvasDimensions.width} × {canvasDimensions.height}px
+                            {disabled && ' • published and locked'}
                             {!isTextTool && canDraw && !committedZone && ' • drag to place photo zone'}
                             {!isTextTool && canDraw && committedZone && ' • drag to move, handles to resize'}
                             {isTextTool && canDraw && !selectedTextZone && ' • drag to place text zone'}

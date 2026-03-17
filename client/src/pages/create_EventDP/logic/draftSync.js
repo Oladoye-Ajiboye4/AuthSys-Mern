@@ -66,3 +66,22 @@ export const autosaveDraft = async ({ token, draftId, editor, baseRevision }) =>
 
     return response.data
 }
+
+export const publishDraft = async ({ token, draftId, editor, baseRevision }) => {
+    const response = await axios.post(
+        `${BASE_URL}createEventDP/drafts/${draftId}/publish`,
+        {
+            editor,
+            baseRevision,
+            lastClientEditAt: new Date().toISOString(),
+        },
+        withAuthHeader(token),
+    )
+
+    return response.data
+}
+
+export const getPublicEventDP = async ({ slug }) => {
+    const response = await axios.get(`${BASE_URL}createEventDP/public/${slug}`)
+    return response.data
+}

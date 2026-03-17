@@ -11,6 +11,13 @@ const autosaveDraft = async (req, res) => {
             return res.status(404).json({ status: false, message: 'Draft not found' })
         }
 
+        if (draft.status === 'published') {
+            return res.status(409).json({
+                status: false,
+                message: 'Published EventDP is locked for editing',
+            })
+        }
+
         if (Number.isInteger(baseRevision) && baseRevision !== draft.revision) {
             return res.status(409).json({
                 status: false,

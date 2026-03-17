@@ -11,6 +11,7 @@ import Dashboard from "./pages/dashboard/Dashboard.jsx";
 import ForgotPassword from "./pages/auth/forgotPassword/ForgotPassword.jsx";
 import ResetPassword from "./pages/auth/resetPassword/ResetPassword.jsx";
 import CreateEventDP from "./pages/create_EventDP/CreateEventDP.jsx";
+import PublicEventDP from "./pages/publicEventDP/PublicEventDP.jsx";
 
 
 const router = createBrowserRouter([
@@ -41,6 +42,10 @@ const router = createBrowserRouter([
   {
     path: "/reset-password",
     element: <ResetPassword />,
+  },
+  {
+    path: "/eventdp/:slug",
+    element: <PublicEventDP />,
   },
 ]);
 

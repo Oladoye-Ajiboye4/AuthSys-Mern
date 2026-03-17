@@ -20,6 +20,13 @@ const createDraft = async (req, res) => {
                 originalFilename: asset.originalFilename || '',
             },
             editor: editor || {},
+            history: [
+                {
+                    action: 'created',
+                    at: new Date(),
+                    meta: {},
+                },
+            ],
             revision: 1,
             lastClientEditAt: new Date(),
             lastServerSaveAt: new Date(),

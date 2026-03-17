@@ -32,47 +32,13 @@ const statsCards = [
   },
 ]
 
-const recentEvents = [
-  {
-    id: 'event-1',
-    name: 'Tech Summit 2024',
-    date: 'Created Oct 24, 2023',
-    status: 'ACTIVE',
-    statusClass: 'bg-forest-green text-white',
-    usage: '1,204',
-    views: '3.5k',
-    image:
-      'https://images.unsplash.com/photo-1511578314322-379afb476865?w=420&h=260&fit=crop',
-  },
-  {
-    id: 'event-2',
-    name: 'Design Workshop Q4',
-    date: 'Created Nov 02, 2023',
-    status: 'ACTIVE',
-    statusClass: 'bg-forest-green text-white',
-    usage: '856',
-    views: '1.2k',
-    image:
-      'https://images.unsplash.com/photo-1518455027359-f3f8164ba6bd?w=420&h=260&fit=crop',
-  },
-  {
-    id: 'event-3',
-    name: 'Global Startup Meet',
-    date: 'Created Sep 15, 2023',
-    status: 'ENDED',
-    statusClass: 'bg-dark-slate/70 text-white',
-    usage: '2,410',
-    views: '5.8k',
-    image:
-      'https://images.unsplash.com/photo-1556761175-b413da4baf72?w=420&h=260&fit=crop',
-  },
-]
-
 const Dashboard = () => {
   const dashboardUrl = `${import.meta.env.VITE_BASE_URL}getDashboard`
   const [user, setUser] = useState({})
   const [loading, setLoading] = useState(true)
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
+  const [recentEvents, setRecentEvents] = useState([])
+  const [eventHistory, setEventHistory] = useState([])
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -92,6 +58,8 @@ const Dashboard = () => {
       .then((result) => {
         if (result.status === 200) {
           setUser(result.data.user)
+          setRecentEvents(Array.isArray(result.data.recentEventDPs) ? result.data.recentEventDPs : [])
+          setEventHistory(Array.isArray(result.data.eventHistory) ? result.data.eventHistory : [])
           setLoading(false)
           notify(result.data.user?.username)
         } else if (result.status === 401 || result.status === 500 || result.status === 404) {
@@ -161,6 +129,18 @@ const Dashboard = () => {
     if (item?.id === 'dashboard') {
       navigate('/dashboard')
     }
+  }
+
+  const getStatusPillClass = (status) => {
+    return status === 'published'
+      ? 'bg-forest-green text-white'
+      : 'bg-dark-slate/70 text-white'
+  }
+
+  const formatHistoryAction = (action) => {
+    if (action === 'created') return 'Draft created'
+    if (action === 'published') return 'Published and link generated'
+    return action || 'Updated'
   }
 
   if (loading) {
@@ -360,27 +340,65 @@ const Dashboard = () => {
                   >
                     <div className='relative h-36'>
                       <img src={event.image} alt={event.name} className='h-full w-full object-cover transition-transform duration-500 hover:scale-105' />
-                      <span className={`absolute left-3 bottom-3 rounded-md px-2 py-1 text-xs font-bold ${event.statusClass}`}>
-                        {event.status}
+                      <span className={`absolute left-3 bottom-3 rounded-md px-2 py-1 text-xs font-bold ${getStatusPillClass(event.status)}`}>
+                        {String(event.status || '').toUpperCase()}
                       </span>
                     </div>
                     <div className='p-4'>
                       <h3 className='text-2xl font-bold leading-tight'>{event.name}</h3>
-                      <p className='text-sm text-text-muted mt-1'>{event.date}</p>
+                      <p className='text-sm text-text-muted mt-1'>Published {event.date ? new Date(event.date).toLocaleDateString() : 'N/A'}</p>
 
                       <div className='mt-4 grid grid-cols-2 gap-4 border-t border-forest-green/15 pt-3'>
                         <div>
-                          <p className='text-xs uppercase text-text-muted'>Usage</p>
-                          <p className='text-xl font-extrabold'>{event.usage}</p>
+                          <p className='text-xs uppercase text-text-muted'>Link</p>
+                          <a href={event.publicUrl} target='_blank' rel='noreferrer' className='text-sm font-extrabold text-forest-green hover:underline'>
+                            Open
+                          </a>
                         </div>
                         <div>
-                          <p className='text-xs uppercase text-text-muted'>Views</p>
-                          <p className='text-xl font-extrabold'>{event.views}</p>
+                          <p className='text-xs uppercase text-text-muted'>Slug</p>
+                          <p className='text-sm font-extrabold'>{event.slug || 'N/A'}</p>
                         </div>
                       </div>
                     </div>
                   </article>
                 ))}
+                {recentEvents.length === 0 && (
+                  <div className='col-span-full rounded-xl border border-dashed border-forest-green/35 p-6 text-center text-sm text-text-muted'>
+                    No published EventDP yet. Create one and generate your link.
+                  </div>
+                )}
+              </div>
+            </section>
+
+            <section className='rounded-2xl border border-forest-green/15 bg-white/80 p-5 mt-5 animate-fade-in-up'>
+              <div className='flex items-center gap-2 mb-4'>
+                <Icon icon='mdi:timeline-text-outline' width='18' height='18' className='text-forest-green' />
+                <h2 className='text-2xl font-bold'>EventDP History</h2>
+              </div>
+
+              <div className='space-y-2'>
+                {eventHistory.map((item) => (
+                  <div key={item.id} className='rounded-xl border border-forest-green/15 bg-white p-3 flex items-center justify-between gap-3'>
+                    <div>
+                      <p className='text-sm font-semibold text-dark-slate'>{item.name}</p>
+                      <p className='text-xs text-text-muted mt-0.5'>{formatHistoryAction(item.action)}</p>
+                    </div>
+                    <div className='text-right'>
+                      <p className='text-xs font-semibold text-dark-slate/75'>{item.at ? new Date(item.at).toLocaleString() : 'N/A'}</p>
+                      {item.publicUrl && (
+                        <a href={item.publicUrl} target='_blank' rel='noreferrer' className='text-xs text-forest-green font-semibold hover:underline'>
+                          Open Link
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                {eventHistory.length === 0 && (
+                  <div className='rounded-xl border border-dashed border-forest-green/35 p-6 text-center text-sm text-text-muted'>
+                    No EventDP history yet.
+                  </div>
+                )}
               </div>
             </section>
           </div>

@@ -11,6 +11,7 @@ const MobileControlsPanel = ({
     onRadiusChange,
     snapToGrid,
     onToggleSnap,
+    disabled,
 }) => {
     const [open, setOpen] = useState(false)
 
@@ -18,15 +19,16 @@ const MobileControlsPanel = ({
         <div className='xl:hidden fixed bottom-4 left-1/2 -translate-x-1/2 z-40 w-[calc(100%-1.5rem)] sm:w-115'>
             <button
                 type='button'
+                disabled={disabled}
                 onClick={() => setOpen((prev) => !prev)}
-                className='w-full flex items-center justify-between px-4 py-3 rounded-2xl bg-white/90 backdrop-blur border border-dusty-green/25 shadow-lg'
+                className='w-full flex items-center justify-between px-4 py-3 rounded-2xl bg-white/90 backdrop-blur border border-dusty-green/25 shadow-lg disabled:opacity-60 disabled:cursor-not-allowed'
             >
                 <span className='text-sm font-semibold'>Quick Controls</span>
                 <Icon icon={open ? 'mdi:chevron-down' : 'mdi:chevron-up'} width='20' height='20' />
             </button>
 
             {open && (
-                <div className='mt-2 rounded-2xl bg-white/95 backdrop-blur border border-dusty-green/20 p-4 space-y-4 animate-fade-in-up'>
+                <fieldset disabled={disabled} className='mt-2 rounded-2xl bg-white/95 backdrop-blur border border-dusty-green/20 p-4 space-y-4 animate-fade-in-up'>
                     {/* Zone shape selector */}
                     <div className='space-y-2'>
                         <span className='text-xs font-bold text-dark-slate uppercase tracking-wide'>Guest Photo Zone Shape</span>
@@ -85,7 +87,7 @@ const MobileControlsPanel = ({
                     >
                         Snap to Grid: {snapToGrid ? 'On' : 'Off'}
                     </button>
-                </div>
+                </fieldset>
             )}
         </div>
     )

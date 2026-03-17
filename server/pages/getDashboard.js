@@ -1,5 +1,5 @@
 const userModel = require('../models/user.model')
-const bcrypt = require('bcryptjs')
+const EventDPDraft = require('../models/eventDPDraft.model')
 const jwt = require('jsonwebtoken')
 
 const getDashboard = (req, res) => {
@@ -25,11 +25,55 @@ const getDashboard = (req, res) => {
         console.log(result);
         const email = result.email
         userModel.findOne({ email })
-            .then((user) => {
+            .then(async (user) => {
                 if (!user) {
                     return res.status(404).json({ status: false, message: "User not found" })
                 }
-                return res.status(200).json({ status: true, message: "Token is valid", user })
+
+                const [recentPublished, latestDrafts] = await Promise.all([
+                    EventDPDraft.find({ userEmail: email, status: 'published' })
+                        .sort({ 'publish.publishedAt': -1, updatedAt: -1 })
+                        .limit(6)
+                        .select('asset publish status createdAt updatedAt'),
+                    EventDPDraft.find({ userEmail: email })
+                        .sort({ updatedAt: -1 })
+                        .limit(20)
+                        .select('status publish history asset updatedAt createdAt'),
+                ])
+
+                const recentEventDPs = recentPublished.map((item) => ({
+                    id: String(item._id),
+                    name: item.asset?.originalFilename || `EventDP ${String(item._id).slice(-6)}`,
+                    date: item.publish?.publishedAt || item.createdAt,
+                    status: item.status,
+                    image: item.asset?.secureUrl || '',
+                    publicUrl: item.publish?.publicUrl || '',
+                    slug: item.publish?.slug || '',
+                }))
+
+                const eventHistory = latestDrafts
+                    .flatMap((draft) => {
+                        const baseHistory = Array.isArray(draft.history) ? draft.history : []
+                        return baseHistory.map((entry) => ({
+                            id: `${draft._id}-${entry.action}-${new Date(entry.at).getTime()}`,
+                            draftId: String(draft._id),
+                            action: entry.action,
+                            at: entry.at,
+                            status: draft.status,
+                            name: draft.asset?.originalFilename || `EventDP ${String(draft._id).slice(-6)}`,
+                            publicUrl: draft.publish?.publicUrl || '',
+                        }))
+                    })
+                    .sort((a, b) => new Date(b.at) - new Date(a.at))
+                    .slice(0, 12)
+
+                return res.status(200).json({
+                    status: true,
+                    message: "Token is valid",
+                    user,
+                    recentEventDPs,
+                    eventHistory,
+                })
             })
             .catch((err) => {
                 console.error(err);

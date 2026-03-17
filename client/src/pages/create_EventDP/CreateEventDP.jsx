@@ -11,6 +11,7 @@ import { LEFT_NAV_ITEMS } from './constants'
 import {
     autosaveDraft,
     createDraft,
+    publishDraft,
     requestUploadSignature,
     uploadToCloudinary,
 } from './logic/draftSync'
@@ -18,6 +19,10 @@ import {
 const CreateEventDP = () => {
     const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
     const [draftMeta, setDraftMeta] = useState({ draftId: null, revision: 0, uploadAsset: null })
+    const [publishState, setPublishState] = useState('draft')
+    const [showPublishConfirm, setShowPublishConfirm] = useState(false)
+    const [showShareModal, setShowShareModal] = useState(false)
+    const [shareLink, setShareLink] = useState('')
 
     const uploadKeyRef = useRef('')
     const autosaveTimerRef = useRef(null)
@@ -25,6 +30,7 @@ const CreateEventDP = () => {
     const lastSavedSnapshotRef = useRef('')
     const saveInFlightRef = useRef(false)
     const [lastSavedTime, setLastSavedTime] = useState(null)
+    const isEditorLocked = publishState === 'published' || publishState === 'publishing'
 
     const {
         activeMenu,
@@ -80,6 +86,10 @@ const CreateEventDP = () => {
             uploadKeyRef.current = ''
             setDraftMeta({ draftId: null, revision: 0, uploadAsset: null })
             lastSavedSnapshotRef.current = ''
+            setPublishState('draft')
+            setShowPublishConfirm(false)
+            setShowShareModal(false)
+            setShareLink('')
         }
     }, [uploadedImage])
 
@@ -147,7 +157,7 @@ const CreateEventDP = () => {
     useEffect(() => {
         const serializedSnapshot = JSON.stringify(draftSnapshot)
 
-        if (!draftMeta.draftId || saveInFlightRef.current) {
+        if (!draftMeta.draftId || saveInFlightRef.current || isEditorLocked) {
             return
         }
 
@@ -193,7 +203,7 @@ const CreateEventDP = () => {
                 clearTimeout(autosaveTimerRef.current)
             }
         }
-    }, [draftMeta.draftId, draftSnapshot])
+    }, [draftMeta.draftId, draftSnapshot, isEditorLocked])
 
     useEffect(() => {
         if (!lastSavedTime) {
@@ -207,9 +217,121 @@ const CreateEventDP = () => {
         return () => clearTimeout(hideTimer)
     }, [lastSavedTime])
 
+    const openShareIntent = (platform) => {
+        if (!shareLink) {
+            return
+        }
+
+        const encodedUrl = encodeURIComponent(shareLink)
+        const encodedText = encodeURIComponent('Check out our EventDP link')
+        const endpoints = {
+            whatsapp: `https://wa.me/?text=${encodeURIComponent(`Check out our EventDP: ${shareLink}`)}`,
+            facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}`,
+            x: `https://twitter.com/intent/tweet?url=${encodedUrl}&text=${encodedText}`,
+            linkedin: `https://www.linkedin.com/sharing/share-offsite/?url=${encodedUrl}`,
+            telegram: `https://t.me/share/url?url=${encodedUrl}&text=${encodedText}`,
+        }
+
+        const targetUrl = endpoints[platform]
+        if (targetUrl) {
+            window.open(targetUrl, '_blank', 'noopener,noreferrer')
+        }
+    }
+
+    const copyShareLink = async () => {
+        if (!shareLink) {
+            return
+        }
+
+        try {
+            await navigator.clipboard.writeText(shareLink)
+            setLastSavedTime(new Date())
+        } catch (error) {
+            console.error('Failed to copy share link:', error)
+        }
+    }
+
+    const handleGenerateLinkClick = () => {
+        if (!draftMeta.draftId || !uploadedImage || isEditorLocked) {
+            return
+        }
+        setShowPublishConfirm(true)
+    }
+
+    const handlePublish = async () => {
+        if (!draftMeta.draftId || !uploadedImage) {
+            return
+        }
+
+        const token = localStorage.getItem('token')
+        if (!token) {
+            return
+        }
+
+        if (autosaveTimerRef.current) {
+            clearTimeout(autosaveTimerRef.current)
+            autosaveTimerRef.current = null
+        }
+
+        try {
+            setPublishState('publishing')
+            setShowPublishConfirm(false)
+            saveInFlightRef.current = true
+
+            const serializedSnapshot = JSON.stringify(draftSnapshot)
+            if (serializedSnapshot !== lastSavedSnapshotRef.current) {
+                const saveResponse = await autosaveDraft({
+                    token,
+                    draftId: latestDraftMetaRef.current.draftId,
+                    editor: draftSnapshot,
+                    baseRevision: latestDraftMetaRef.current.revision,
+                })
+
+                setDraftMeta((prev) => ({
+                    ...prev,
+                    revision: saveResponse.revision,
+                }))
+
+                latestDraftMetaRef.current = {
+                    ...latestDraftMetaRef.current,
+                    revision: saveResponse.revision,
+                }
+                lastSavedSnapshotRef.current = serializedSnapshot
+            }
+
+            const publishResponse = await publishDraft({
+                token,
+                draftId: latestDraftMetaRef.current.draftId,
+                editor: draftSnapshot,
+                baseRevision: latestDraftMetaRef.current.revision,
+            })
+
+            const nextRevision = publishResponse.revision
+            setDraftMeta((prev) => ({
+                ...prev,
+                revision: nextRevision,
+            }))
+
+            setShareLink(publishResponse.publish?.publicUrl || '')
+            setPublishState('published')
+            setPreviewMode(true)
+            setShowShareModal(true)
+        } catch (error) {
+            console.error('Error publishing EventDP:', error)
+            setPublishState('draft')
+        } finally {
+            saveInFlightRef.current = false
+        }
+    }
+
     return (
         <main className='h-screen bg-pale-sage flex flex-col overflow-hidden'>
-            <TopNav showGenerateLink={Boolean(uploadedImage)} />
+            <TopNav
+                showGenerateLink={Boolean(uploadedImage)}
+                onGenerateLink={handleGenerateLinkClick}
+                isGenerating={publishState === 'publishing'}
+                isPublished={publishState === 'published'}
+            />
 
             {/* Autosave Status Indicator */}
             <div className='fixed top-20 right-6 z-30 flex items-center gap-1.5 text-xs font-medium'>
@@ -293,6 +415,7 @@ const CreateEventDP = () => {
                         onZoomOut={() => setZoomLevel(zoom - 0.1)}
                         previewMode={previewMode}
                         onTogglePreview={() => setPreviewMode((prev) => !prev)}
+                        disabled={isEditorLocked}
                     />
 
                     <CanvasStage
@@ -316,6 +439,7 @@ const CreateEventDP = () => {
                         allowGuestText={allowGuestText}
                         activeCanvasTool={activeCanvasTool}
                         guestTextStyle={guestTextStyle}
+                        disabled={isEditorLocked}
                     />
                 </section>
 
@@ -341,6 +465,7 @@ const CreateEventDP = () => {
                         onClearTextZone={clearTextZone}
                         guestTextStyle={guestTextStyle}
                         onGuestTextStyleChange={updateGuestTextStyle}
+                        disabled={isEditorLocked}
                     />
                 )}
 
@@ -356,8 +481,94 @@ const CreateEventDP = () => {
                     onRadiusChange={setRadius}
                     snapToGrid={snapToGrid}
                     onToggleSnap={toggleSnapToGrid}
+                    disabled={isEditorLocked}
                 />
             </div>
+
+            {showPublishConfirm && (
+                <div className='fixed inset-0 z-50 bg-dark-slate/55 flex items-center justify-center p-4'>
+                    <div className='w-full max-w-md rounded-2xl bg-white shadow-2xl p-6 space-y-4'>
+                        <h3 className='text-lg font-bold text-dark-slate'>Publish and Generate Link?</h3>
+                        <p className='text-sm text-dark-slate/70'>
+                            This will lock canvas editing and settings for this EventDP. You can still share the generated link anytime.
+                        </p>
+                        <div className='flex items-center justify-end gap-2'>
+                            <button
+                                type='button'
+                                onClick={() => setShowPublishConfirm(false)}
+                                className='h-10 px-4 rounded-xl border border-dusty-green/35 text-dark-slate font-semibold'
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type='button'
+                                onClick={handlePublish}
+                                className='h-10 px-4 rounded-xl bg-forest-green text-white font-semibold'
+                            >
+                                Publish & Generate
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {showShareModal && (
+                <div className='fixed inset-0 z-50 bg-dark-slate/55 flex items-center justify-center p-4'>
+                    <div className='w-full max-w-xl rounded-2xl bg-white shadow-2xl p-6 space-y-5'>
+                        <div className='flex items-start justify-between gap-4'>
+                            <div>
+                                <h3 className='text-lg font-bold text-dark-slate'>Your EventDP Link Is Ready</h3>
+                                <p className='text-sm text-dark-slate/70 mt-1'>
+                                    Editor is now locked. Share this public link on social platforms.
+                                </p>
+                            </div>
+                            <button
+                                type='button'
+                                onClick={() => setShowShareModal(false)}
+                                className='h-9 w-9 rounded-lg border border-dusty-green/35 text-dark-slate/75'
+                                aria-label='Close share modal'
+                            >
+                                <Icon icon='mdi:close' width='18' height='18' className='mx-auto' />
+                            </button>
+                        </div>
+
+                        <div className='rounded-xl border border-dusty-green/35 bg-pale-sage/50 p-3 flex items-center gap-2'>
+                            <input
+                                value={shareLink}
+                                readOnly
+                                className='flex-1 bg-transparent text-xs sm:text-sm text-dark-slate outline-none'
+                            />
+                            <button
+                                type='button'
+                                onClick={copyShareLink}
+                                className='h-9 px-3 rounded-lg bg-dark-slate text-white text-xs font-semibold'
+                            >
+                                Copy Link
+                            </button>
+                        </div>
+
+                        <div className='grid grid-cols-2 sm:grid-cols-5 gap-2'>
+                            {[
+                                { id: 'whatsapp', label: 'WhatsApp', icon: 'mdi:whatsapp' },
+                                { id: 'facebook', label: 'Facebook', icon: 'mdi:facebook' },
+                                { id: 'x', label: 'X', icon: 'mdi:twitter' },
+                                { id: 'linkedin', label: 'LinkedIn', icon: 'mdi:linkedin' },
+                                { id: 'telegram', label: 'Telegram', icon: 'mdi:telegram' },
+                            ].map((social) => (
+                                <button
+                                    key={social.id}
+                                    type='button'
+                                    onClick={() => openShareIntent(social.id)}
+                                    className='h-11 rounded-xl border border-dusty-green/35 bg-white text-dark-slate text-xs font-semibold flex items-center justify-center gap-1.5 hover:bg-pale-sage transition-colors'
+                                >
+                                    <Icon icon={social.icon} width='16' height='16' />
+                                    {social.label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            )}
         </main>
     )
 }
