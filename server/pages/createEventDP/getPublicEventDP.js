@@ -1,5 +1,54 @@
 const EventDPDraft = require('../../models/eventDPDraft.model')
 
+const toNumber = (value, fallback = 0) => {
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : fallback
+}
+
+const fromNormalised = (normalised, asset) => {
+    if (!normalised || typeof normalised !== 'object') {
+        return null
+    }
+
+    const assetWidth = Math.max(1, toNumber(asset?.width, 0))
+    const assetHeight = Math.max(1, toNumber(asset?.height, 0))
+
+    const x = Math.min(1, Math.max(0, toNumber(normalised.x, 0)))
+    const y = Math.min(1, Math.max(0, toNumber(normalised.y, 0)))
+    const width = Math.min(1, Math.max(0, toNumber(normalised.width, 0)))
+    const height = Math.min(1, Math.max(0, toNumber(normalised.height, 0)))
+
+    return {
+        x: Math.round(x * assetWidth),
+        y: Math.round(y * assetHeight),
+        width: Math.round(width * assetWidth),
+        height: Math.round(height * assetHeight),
+    }
+}
+
+const resolveZoneForGuest = (zone, asset) => {
+    if (!zone || typeof zone !== 'object') {
+        return null
+    }
+
+    // Priority 1: Normalised (most robust)
+    // Priority 2: Actual (immutable source)
+    // Priority 3: Display (fallback)
+    const actual = fromNormalised(zone.normalised, asset) || zone.actual || zone.display || null
+    const display = zone.display || zone.actual || null
+    const normalised = zone.normalised || null
+
+    if (!actual && !display) {
+        return null
+    }
+
+    return {
+        display: display || actual,
+        actual: actual || display,
+        normalised: normalised,
+    }
+}
+
 const getPublicEventDP = async (req, res) => {
     try {
         const { slug, accessKey } = req.params
@@ -40,8 +89,10 @@ const getPublicEventDP = async (req, res) => {
             },
             editor: {
                 zoneShape: draft.editor?.zoneShape,
-                committedZone: draft.editor?.committedZone,
-                textZones: draft.editor?.textZones,
+                committedZone: resolveZoneForGuest(draft.editor?.committedZone, draft.asset),
+                textZones: Array.isArray(draft.editor?.textZones)
+                    ? draft.editor.textZones.map((zone) => resolveZoneForGuest(zone, draft.asset)).filter(Boolean)
+                    : [],
                 allowGuestText: draft.editor?.allowGuestText,
                 guestTextStyle: draft.editor?.guestTextStyle,
             },
@@ -49,6 +100,9 @@ const getPublicEventDP = async (req, res) => {
                 publicUrl: draft.publish?.publicUrl,
                 publishedAt: draft.publish?.publishedAt,
                 expiresAt: draft.publish?.expiresAt,
+            },
+            metrics: {
+                downloadCount: Number(draft.metrics?.downloadCount || 0),
             },
             createdAt: draft.createdAt,
             updatedAt: draft.updatedAt,

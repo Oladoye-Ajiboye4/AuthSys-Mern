@@ -84,10 +84,28 @@ export const publishDraft = async ({ token, draftId, editor, baseRevision, title
     return response.data
 }
 
+export const getDraft = async ({ token, draftId }) => {
+    const response = await axios.get(
+        `${BASE_URL}createEventDP/drafts/${draftId}`,
+        withAuthHeader(token),
+    )
+
+    return response.data
+}
+
 export const getPublicEventDP = async ({ slug, projectSlug, accessKey }) => {
     const endpoint = accessKey
         ? `${BASE_URL}createEventDP/public/${projectSlug || 'eventdp'}/${accessKey}`
         : `${BASE_URL}createEventDP/public/${slug}`
     const response = await axios.get(endpoint)
+    return response.data
+}
+
+export const recordPublicDownload = async ({ slug, projectSlug, accessKey }) => {
+    const endpoint = accessKey
+        ? `${BASE_URL}createEventDP/public/${projectSlug || 'eventdp'}/${accessKey}/download`
+        : `${BASE_URL}createEventDP/public/${slug}/download`
+
+    const response = await axios.post(endpoint)
     return response.data
 }

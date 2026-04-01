@@ -1,5 +1,6 @@
 const EventDPDraft = require('../../models/eventDPDraft.model')
 const { z } = require('zod')
+const normalizeEditor = require('./normalizeEditor')
 
 const autosaveSchema = z.object({
     editor: z.record(z.string(), z.unknown()).optional(),
@@ -21,7 +22,11 @@ const autosaveDraft = async (req, res) => {
 
         const { editor, baseRevision, lastClientEditAt, title } = parsed.data
 
-        const draft = await EventDPDraft.findOne({ _id: draftId, userEmail: req.user.email })
+        const draft = await EventDPDraft.findOne({
+            _id: draftId,
+            userEmail: req.user.email,
+            isDeleted: { $ne: true },
+        })
 
         if (!draft) {
             return res.status(404).json({ status: false, message: 'Draft not found' })
@@ -42,7 +47,7 @@ const autosaveDraft = async (req, res) => {
             })
         }
 
-        draft.editor = editor || draft.editor
+        draft.editor = editor ? normalizeEditor(editor, draft.asset) : draft.editor
         if (title) {
             draft.title = title
         }

@@ -167,6 +167,8 @@ const CanvasStage = ({
         zoneShape: isTextTool ? 'square' : zoneShape,
         committedZone: isTextTool ? selectedTextZone : committedZone,
         onZoneCommit: isTextTool ? onTextZoneCommit : onZoneCommit,
+        canvasDimensions,
+        displayedCanvasSize,
     })
 
     const handleFilePick = (event) => {

@@ -32,6 +32,23 @@ const DEFAULT_GUEST_TEXT_STYLE = {
 
 const MAX_TEXT_ZONES = 2
 
+const DEFAULT_EDITOR_STATE = {
+    zoneShape: 'square',
+    committedZone: null,
+    textZones: [],
+    activeTextZoneIndex: null,
+    bleedGuides: true,
+    backgroundOpacity: 85,
+    cornerRadius: 16,
+    borderStyle: BORDER_STYLES[1].id,
+    snapToGrid: false,
+    allowGuestText: false,
+    activeCanvasTool: 'photo',
+    guestTextStyle: DEFAULT_GUEST_TEXT_STYLE,
+    zoom: 1,
+    activeMenu: 'template',
+}
+
 const normalizeTextStyle = (style) => {
     const next = { ...style }
     next.text = String(next.text || '').slice(0, 90)
@@ -309,29 +326,48 @@ const useCreateEventDPState = () => {
     }
 
     const restoreFromSnapshot = (snapshot) => {
-        if (!snapshot) {
-            return
+        const safeSnapshot = {
+            ...DEFAULT_EDITOR_STATE,
+            ...(snapshot || {}),
         }
-        setZoneShape(snapshot.zoneShape)
-        setCommittedZone(snapshot.committedZone || null)
-        setBleedGuides(snapshot.bleedGuides)
-        setBackgroundOpacity(snapshot.backgroundOpacity)
-        setCornerRadius(snapshot.cornerRadius)
-        setBorderStyle(snapshot.borderStyle)
-        setSnapToGrid(snapshot.snapToGrid)
-        setAllowGuestText(Boolean(snapshot.allowGuestText))
-        const snapshotTextZones = Array.isArray(snapshot.textZones)
-            ? snapshot.textZones.slice(0, MAX_TEXT_ZONES)
+
+        setZoneShape(safeSnapshot.zoneShape)
+        setCommittedZone(safeSnapshot.committedZone || null)
+        setBleedGuides(Boolean(safeSnapshot.bleedGuides))
+        setBackgroundOpacity(clamp(Number(safeSnapshot.backgroundOpacity), 25, 100))
+        setCornerRadius(clamp(Number(safeSnapshot.cornerRadius), 0, 52))
+        setBorderStyle(safeSnapshot.borderStyle || DEFAULT_EDITOR_STATE.borderStyle)
+        setSnapToGrid(Boolean(safeSnapshot.snapToGrid))
+        setAllowGuestText(Boolean(safeSnapshot.allowGuestText))
+        const snapshotTextZones = Array.isArray(safeSnapshot.textZones)
+            ? safeSnapshot.textZones.slice(0, MAX_TEXT_ZONES)
             : []
-        const hasSnapshotActiveIndex = Number.isInteger(snapshot.activeTextZoneIndex)
-            && snapshot.activeTextZoneIndex >= 0
-            && snapshot.activeTextZoneIndex < snapshotTextZones.length
+        const hasSnapshotActiveIndex = Number.isInteger(safeSnapshot.activeTextZoneIndex)
+            && safeSnapshot.activeTextZoneIndex >= 0
+            && safeSnapshot.activeTextZoneIndex < snapshotTextZones.length
 
         setTextZones(snapshotTextZones)
-        setActiveTextZoneIndex(hasSnapshotActiveIndex ? snapshot.activeTextZoneIndex : null)
-        setActiveCanvasTool(snapshot.activeCanvasTool || 'photo')
-        setGuestTextStyle(normalizeTextStyle(snapshot.guestTextStyle || DEFAULT_GUEST_TEXT_STYLE))
-        setZoom(snapshot.zoom)
+        setActiveTextZoneIndex(hasSnapshotActiveIndex ? safeSnapshot.activeTextZoneIndex : null)
+        setActiveCanvasTool(safeSnapshot.activeCanvasTool || 'photo')
+        setGuestTextStyle(normalizeTextStyle(safeSnapshot.guestTextStyle || DEFAULT_GUEST_TEXT_STYLE))
+        setZoom(clamp(Number(safeSnapshot.zoom) || 1, 0.5, 1.8))
+        setActiveMenu(safeSnapshot.activeMenu || DEFAULT_EDITOR_STATE.activeMenu)
+    }
+
+    const hydrateDraft = ({ asset, editor }) => {
+        if (!asset?.secureUrl) {
+            return
+        }
+
+        setUploadedImage({
+            src: asset.secureUrl,
+            width: Number(asset.width) || 1080,
+            height: Number(asset.height) || 1920,
+            name: asset.originalFilename || 'EventDP',
+            file: null,
+        })
+
+        restoreFromSnapshot(editor || {})
     }
 
     const toggleBleedGuides = () => {
@@ -442,6 +478,7 @@ const useCreateEventDPState = () => {
         canvasDimensions,
         displayedCanvasSize,
         draftSnapshot,
+        hydrateDraft,
     }
 }
 

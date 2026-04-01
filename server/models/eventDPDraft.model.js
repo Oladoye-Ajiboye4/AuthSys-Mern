@@ -10,6 +10,7 @@ const zoneSchema = new mongoose.Schema({
 const textZoneSchema = new mongoose.Schema({
     actual: { type: zoneSchema, default: null },
     display: { type: zoneSchema, default: null },
+    normalised: { type: zoneSchema, default: null },
 }, { _id: false })
 
 const historyEntrySchema = new mongoose.Schema({
@@ -22,6 +23,8 @@ const eventDPDraftSchema = new mongoose.Schema({
     userEmail: { type: String, required: true, index: true },
     title: { type: String, default: 'Untitled Project', trim: true, maxlength: 80, index: true },
     status: { type: String, enum: ['draft', 'published'], default: 'draft' },
+    isDeleted: { type: Boolean, default: false, index: true },
+    deletedAt: { type: Date, default: null },
     asset: {
         publicId: { type: String, required: true },
         secureUrl: { type: String, required: true },
@@ -36,6 +39,7 @@ const eventDPDraftSchema = new mongoose.Schema({
         committedZone: {
             actual: { type: zoneSchema, default: null },
             display: { type: zoneSchema, default: null },
+            normalised: { type: zoneSchema, default: null },
         },
         textZones: { type: [textZoneSchema], default: [] },
         activeTextZoneIndex: { type: Number, default: null },
@@ -57,6 +61,9 @@ const eventDPDraftSchema = new mongoose.Schema({
         expiresAt: { type: Date, default: null, index: true },
         publicUrl: { type: String, default: '' },
         publishedAt: { type: Date, default: null },
+    },
+    metrics: {
+        downloadCount: { type: Number, default: 0 },
     },
     history: { type: [historyEntrySchema], default: [] },
     revision: { type: Number, default: 1 },

@@ -1,9 +1,191 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router'
 import { Icon } from '@iconify/react'
-import { getPublicEventDP } from '../create_EventDP/logic/draftSync'
+import { getPublicEventDP, recordPublicDownload } from '../create_EventDP/logic/draftSync'
 import GuestCanvasDisplay from './components/GuestCanvasDisplay'
 import GuestSubmissionForm from './components/GuestSubmissionForm'
+
+const readFileAsDataUrl = (file) => new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result)
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+})
+
+const loadImageElement = async (src) => {
+    if (!src) {
+        throw new Error('Missing image source')
+    }
+
+    if (src.startsWith('data:')) {
+        return await new Promise((resolve, reject) => {
+            const image = new Image()
+            image.onload = () => resolve(image)
+            image.onerror = reject
+            image.src = src
+        })
+    }
+
+    const response = await fetch(src)
+    const blob = await response.blob()
+    const objectUrl = URL.createObjectURL(blob)
+
+    try {
+        const image = await new Promise((resolve, reject) => {
+            const img = new Image()
+            img.onload = () => resolve(img)
+            img.onerror = reject
+            img.src = objectUrl
+        })
+        return image
+    } finally {
+        URL.revokeObjectURL(objectUrl)
+    }
+}
+
+const getZoneActual = (zone) => {
+    if (zone?.actual) {
+        return zone.actual
+    }
+    if (zone?.display) {
+        return zone.display
+    }
+    return null
+}
+
+const drawImageIntoZone = (ctx, image, zone, zoneShape) => {
+    const x = Number(zone?.x || 0)
+    const y = Number(zone?.y || 0)
+    const width = Number(zone?.width || 0)
+    const height = Number(zone?.height || 0)
+
+    if (width <= 2 || height <= 2) {
+        return
+    }
+
+    ctx.save()
+
+    if (zoneShape === 'circle') {
+        ctx.beginPath()
+        ctx.ellipse(x + (width / 2), y + (height / 2), width / 2, height / 2, 0, 0, Math.PI * 2)
+        ctx.clip()
+    } else {
+        const radius = Math.min(16, width / 8, height / 8)
+        ctx.beginPath()
+        ctx.moveTo(x + radius, y)
+        ctx.lineTo(x + width - radius, y)
+        ctx.quadraticCurveTo(x + width, y, x + width, y + radius)
+        ctx.lineTo(x + width, y + height - radius)
+        ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height)
+        ctx.lineTo(x + radius, y + height)
+        ctx.quadraticCurveTo(x, y + height, x, y + height - radius)
+        ctx.lineTo(x, y + radius)
+        ctx.quadraticCurveTo(x, y, x + radius, y)
+        ctx.closePath()
+        ctx.clip()
+    }
+
+    const scale = Math.max(width / image.width, height / image.height)
+    const drawWidth = image.width * scale
+    const drawHeight = image.height * scale
+    const drawX = x + ((width - drawWidth) / 2)
+    const drawY = y + ((height - drawHeight) / 2)
+
+    ctx.drawImage(image, drawX, drawY, drawWidth, drawHeight)
+    ctx.restore()
+}
+
+const drawTextIntoZone = (ctx, text, zone, textStyle) => {
+    const x = Number(zone?.x || 0)
+    const y = Number(zone?.y || 0)
+    const width = Number(zone?.width || 0)
+    const height = Number(zone?.height || 0)
+    if (width <= 6 || height <= 6 || !text) {
+        return
+    }
+
+    const fontSize = Math.max(14, Math.min(Number(textStyle?.fontSize || 30), height * 0.45))
+    const fontFamily = textStyle?.fontFamily || 'Poppins'
+    const fontWeight = Number(textStyle?.fontWeight || 700)
+    const lineHeight = Math.max(0.9, Math.min(Number(textStyle?.lineHeight || 1.25), 2))
+    const letterSpacing = Number(textStyle?.letterSpacing || 0)
+    const align = ['left', 'right', 'center'].includes(textStyle?.textAlign) ? textStyle.textAlign : 'center'
+
+    ctx.save()
+    ctx.fillStyle = textStyle?.color || '#FFFFFF'
+    ctx.textAlign = align
+    ctx.textBaseline = 'middle'
+    ctx.font = `${fontWeight} ${fontSize}px ${fontFamily}`
+    ctx.shadowColor = 'rgba(0,0,0,0.34)'
+    ctx.shadowBlur = 8
+
+    const words = String(text).split(/\s+/).filter(Boolean)
+    const lines = []
+    let currentLine = ''
+
+    words.forEach((word) => {
+        const nextLine = currentLine ? `${currentLine} ${word}` : word
+        const nextWidth = ctx.measureText(nextLine).width + (letterSpacing * Math.max(0, nextLine.length - 1))
+        if (nextWidth > width - 12 && currentLine) {
+            lines.push(currentLine)
+            currentLine = word
+            return
+        }
+        currentLine = nextLine
+    })
+
+    if (currentLine) {
+        lines.push(currentLine)
+    }
+
+    const linePx = fontSize * lineHeight
+    const maxLines = Math.max(1, Math.floor((height - 8) / linePx))
+    const limitedLines = lines.slice(0, maxLines)
+    const totalHeight = limitedLines.length * linePx
+    const startY = y + ((height - totalHeight) / 2) + (linePx / 2)
+
+    const anchorX = align === 'left'
+        ? x + 6
+        : (align === 'right' ? x + width - 6 : x + (width / 2))
+
+    limitedLines.forEach((line, index) => {
+        const textY = startY + (index * linePx)
+        if (!letterSpacing) {
+            ctx.fillText(line, anchorX, textY)
+            return
+        }
+
+        if (align === 'center') {
+            const totalLineWidth = ctx.measureText(line).width + (letterSpacing * Math.max(0, line.length - 1))
+            let cursor = anchorX - (totalLineWidth / 2)
+            for (const char of line) {
+                ctx.fillText(char, cursor, textY)
+                cursor += ctx.measureText(char).width + letterSpacing
+            }
+            return
+        }
+
+        if (align === 'right') {
+            const reversed = [...line].reverse()
+            let cursor = anchorX
+            reversed.forEach((char) => {
+                const widthChar = ctx.measureText(char).width
+                cursor -= widthChar
+                ctx.fillText(char, cursor, textY)
+                cursor -= letterSpacing
+            })
+            return
+        }
+
+        let cursor = anchorX
+        for (const char of line) {
+            ctx.fillText(char, cursor, textY)
+            cursor += ctx.measureText(char).width + letterSpacing
+        }
+    })
+
+    ctx.restore()
+}
 
 const PublicEventDP = () => {
     const { slug, projectSlug, accessKey } = useParams()
@@ -14,6 +196,21 @@ const PublicEventDP = () => {
     const [hoveredZone, setHoveredZone] = useState(null)
     const [submitting, setSubmitting] = useState(false)
     const [submitSuccess, setSubmitSuccess] = useState(false)
+    const [guestPhotoSrc, setGuestPhotoSrc] = useState('')
+    const [guestTextByZone, setGuestTextByZone] = useState({})
+    const [guestViewMode, setGuestViewMode] = useState('edit')
+    const [downloadError, setDownloadError] = useState('')
+    const [isDownloading, setIsDownloading] = useState(false)
+    const [downloadCount, setDownloadCount] = useState(0)
+
+    const guestDraftStorageKey = useMemo(() => {
+        if (eventDP?._id) {
+            return `eventdp.public.guestDraft.${eventDP._id}`
+        }
+
+        const routeKey = accessKey || slug || projectSlug || 'fallback'
+        return `eventdp.public.guestDraft.${routeKey}`
+    }, [eventDP?._id, accessKey, projectSlug, slug])
 
     useEffect(() => {
         const fetchEventDP = async () => {
@@ -22,6 +219,7 @@ const PublicEventDP = () => {
                 setError(null)
                 const response = await getPublicEventDP({ slug, projectSlug, accessKey })
                 setEventDP(response.eventDP || null)
+                setDownloadCount(Number(response.eventDP?.metrics?.downloadCount || 0))
             } catch (error) {
                 console.error('Failed to load public EventDP:', error)
                 const status = error.response?.status
@@ -41,13 +239,48 @@ const PublicEventDP = () => {
         fetchEventDP()
     }, [slug, projectSlug, accessKey])
 
+    useEffect(() => {
+        if (!eventDP) {
+            return
+        }
+
+        try {
+            const raw = localStorage.getItem(guestDraftStorageKey)
+            if (!raw) {
+                return
+            }
+
+            const parsed = JSON.parse(raw)
+            setGuestPhotoSrc(typeof parsed.photoSrc === 'string' ? parsed.photoSrc : '')
+            setGuestTextByZone(parsed.textByZone && typeof parsed.textByZone === 'object' ? parsed.textByZone : {})
+            setGuestViewMode(parsed.viewMode === 'preview' ? 'preview' : 'edit')
+        } catch (err) {
+            console.warn('Failed to restore guest draft from local storage', err)
+        }
+    }, [eventDP, guestDraftStorageKey])
+
+    useEffect(() => {
+        if (!eventDP) {
+            return
+        }
+
+        try {
+            localStorage.setItem(guestDraftStorageKey, JSON.stringify({
+                photoSrc: guestPhotoSrc,
+                textByZone: guestTextByZone,
+                viewMode: guestViewMode,
+                savedAt: new Date().toISOString(),
+            }))
+        } catch (err) {
+            console.warn('Failed to persist guest draft locally', err)
+        }
+    }, [eventDP, guestDraftStorageKey, guestPhotoSrc, guestTextByZone, guestViewMode])
+
     const handlePhotoSubmit = async (file, onSuccess) => {
         try {
             setSubmitting(true)
-            // TODO: Implement actual photo upload to specific zone
-            console.log('Photo submitted:', file)
-            // Simulate upload delay
-            await new Promise((resolve) => setTimeout(resolve, 1500))
+            const imageDataUrl = await readFileAsDataUrl(file)
+            setGuestPhotoSrc(imageDataUrl)
             setSubmitSuccess(true)
             onSuccess?.()
             setTimeout(() => {
@@ -64,10 +297,10 @@ const PublicEventDP = () => {
     const handleTextSubmit = async (zoneIndex, text, onSuccess) => {
         try {
             setSubmitting(true)
-            // TODO: Implement actual text submission to specific zone
-            console.log('Text submitted to zone', zoneIndex, ':', text)
-            // Simulate submission delay
-            await new Promise((resolve) => setTimeout(resolve, 1000))
+            setGuestTextByZone((prev) => ({
+                ...prev,
+                [String(zoneIndex)]: text,
+            }))
             setSubmitSuccess(true)
             onSuccess?.()
             setTimeout(() => {
@@ -142,6 +375,110 @@ const PublicEventDP = () => {
     const hasTextZones = eventDP.editor?.allowGuestText && eventDP.editor?.textZones?.length > 0
     const canSubmit = hasPhotoZone || hasTextZones
 
+    const hasGuestTextSubmission = Object.values(guestTextByZone).some((value) => Boolean(String(value || '').trim()))
+    const canDownload = Boolean(eventDP.asset?.secureUrl && (guestPhotoSrc || hasGuestTextSubmission))
+    const activeTextIndex = selectedZoneIndex?.startsWith('text-')
+        ? Number(selectedZoneIndex.split('-')[1])
+        : null
+    const activeTextValue = Number.isInteger(activeTextIndex)
+        ? guestTextByZone[String(activeTextIndex)] || ''
+        : ''
+
+    const openShareIntent = (platform) => {
+        const url = window.location.href
+        const encodedUrl = encodeURIComponent(url)
+        const encodedText = encodeURIComponent('Check out this EventDP design')
+
+        const endpoints = {
+            whatsapp: `https://wa.me/?text=${encodeURIComponent(`Check out this EventDP design: ${url}`)}`,
+            facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}`,
+            x: `https://twitter.com/intent/tweet?url=${encodedUrl}&text=${encodedText}`,
+            linkedin: `https://www.linkedin.com/sharing/share-offsite/?url=${encodedUrl}`,
+            telegram: `https://t.me/share/url?url=${encodedUrl}&text=${encodedText}`,
+        }
+
+        const shareUrl = endpoints[platform]
+        if (!shareUrl) {
+            return
+        }
+
+        window.open(shareUrl, '_blank', 'noopener,noreferrer')
+    }
+
+    const handleDownload = async (format = 'png') => {
+        if (!eventDP?.asset?.secureUrl) {
+            return
+        }
+
+        setIsDownloading(true)
+        setDownloadError('')
+
+        try {
+            const baseImage = await loadImageElement(eventDP.asset.secureUrl)
+            const photoImage = guestPhotoSrc ? await loadImageElement(guestPhotoSrc) : null
+            const width = Number(eventDP.asset?.width) || 1080
+            const height = Number(eventDP.asset?.height) || 1920
+
+            const canvas = document.createElement('canvas')
+            canvas.width = width
+            canvas.height = height
+            const ctx = canvas.getContext('2d')
+
+            if (!ctx) {
+                throw new Error('Unable to prepare canvas context')
+            }
+
+            ctx.clearRect(0, 0, width, height)
+            ctx.drawImage(baseImage, 0, 0, width, height)
+
+            const photoZone = getZoneActual(eventDP.editor?.committedZone)
+            if (photoImage && photoZone) {
+                drawImageIntoZone(ctx, photoImage, photoZone, eventDP.editor?.zoneShape)
+            }
+
+            const textZones = Array.isArray(eventDP.editor?.textZones) ? eventDP.editor.textZones : []
+            textZones.forEach((zone, index) => {
+                const submittedText = guestTextByZone[String(index)]
+                if (!submittedText || !String(submittedText).trim()) {
+                    return
+                }
+
+                drawTextIntoZone(ctx, submittedText, getZoneActual(zone), eventDP.editor?.guestTextStyle || {})
+            })
+
+            const mimeType = format === 'jpg' ? 'image/jpeg' : 'image/png'
+            const extension = format === 'jpg' ? 'jpg' : 'png'
+            const blob = await new Promise((resolve) => {
+                canvas.toBlob(resolve, mimeType, 0.92)
+            })
+
+            if (!blob) {
+                throw new Error('Failed to build download image')
+            }
+
+            const objectUrl = URL.createObjectURL(blob)
+            const anchor = document.createElement('a')
+            anchor.href = objectUrl
+            anchor.download = `${(eventDP.title || 'eventdp').replace(/\s+/g, '-').toLowerCase()}-guest.${extension}`
+            document.body.appendChild(anchor)
+            anchor.click()
+            anchor.remove()
+            URL.revokeObjectURL(objectUrl)
+
+            const metricResult = await recordPublicDownload({ slug, projectSlug, accessKey })
+            if (Number.isFinite(metricResult?.downloadCount)) {
+                setDownloadCount(Number(metricResult.downloadCount))
+            } else {
+                setDownloadCount((prev) => prev + 1)
+            }
+        } catch (err) {
+            console.error('Failed to download composed EventDP:', err)
+            setDownloadError('Could not generate your download image. Please try again.')
+        } finally {
+            setIsDownloading(false)
+        }
+    }
+
     return (
         <main className='min-h-screen bg-pale-sage flex flex-col'>
             {/* Header */}
@@ -185,10 +522,13 @@ const PublicEventDP = () => {
                         <GuestCanvasDisplay
                             eventDP={eventDP}
                             selectedZoneIndex={selectedZoneIndex}
-                            onPhotoZoneClick={() => setSelectedZoneIndex('photo')}
-                            onTextZoneClick={(idx) => setSelectedZoneIndex(`text-${idx}`)}
+                            onPhotoZoneClick={() => guestViewMode === 'edit' && setSelectedZoneIndex('photo')}
+                            onTextZoneClick={(idx) => guestViewMode === 'edit' && setSelectedZoneIndex(`text-${idx}`)}
                             hoveredZone={hoveredZone}
                             onZoneHover={setHoveredZone}
+                            guestPhotoSrc={guestPhotoSrc}
+                            guestTextByZone={guestTextByZone}
+                            previewMode={guestViewMode === 'preview'}
                         />
                     ) : (
                         <div className='flex-1 flex items-center justify-center'>
@@ -239,9 +579,10 @@ const PublicEventDP = () => {
                                     {hasPhotoZone && (
                                         <button
                                             onClick={() => setSelectedZoneIndex('photo')}
+                                            disabled={guestViewMode === 'preview'}
                                             className={`w-full px-4 py-3 rounded-lg border-2 transition-all text-left text-sm font-medium ${selectedZoneIndex === 'photo'
-                                                    ? 'border-forest-green bg-forest-green/10 text-forest-green'
-                                                    : 'border-dusty-green/30 hover:border-forest-green/50 text-dark-slate hover:bg-pale-sage/30'
+                                                ? 'border-forest-green bg-forest-green/10 text-forest-green'
+                                                : 'border-dusty-green/30 hover:border-forest-green/50 text-dark-slate hover:bg-pale-sage/30'} ${guestViewMode === 'preview' ? 'opacity-50 cursor-not-allowed' : ''
                                                 }`}
                                         >
                                             <div className='flex items-center gap-2'>
@@ -254,9 +595,10 @@ const PublicEventDP = () => {
                                         <button
                                             key={`text-zone-${idx}`}
                                             onClick={() => setSelectedZoneIndex(`text-${idx}`)}
+                                            disabled={guestViewMode === 'preview'}
                                             className={`w-full px-4 py-3 rounded-lg border-2 transition-all text-left text-sm font-medium ${selectedZoneIndex === `text-${idx}`
-                                                    ? 'border-[#465577] bg-[#465577]/10 text-[#465577]'
-                                                    : 'border-dusty-green/30 hover:border-[#465577]/50 text-dark-slate hover:bg-pale-sage/30'
+                                                ? 'border-[#465577] bg-[#465577]/10 text-[#465577]'
+                                                : 'border-dusty-green/30 hover:border-[#465577]/50 text-dark-slate hover:bg-pale-sage/30'} ${guestViewMode === 'preview' ? 'opacity-50 cursor-not-allowed' : ''
                                                 }`}
                                         >
                                             <div className='flex items-center gap-2'>
@@ -268,6 +610,89 @@ const PublicEventDP = () => {
                                 </div>
                             </div>
                         )}
+
+                        <div className='space-y-2'>
+                            <h3 className='font-bold text-dark-slate text-sm uppercase tracking-wide'>
+                                View Mode
+                            </h3>
+                            <div className='grid grid-cols-2 gap-2'>
+                                <button
+                                    type='button'
+                                    onClick={() => setGuestViewMode('edit')}
+                                    className={`h-10 rounded-lg border text-xs font-bold uppercase tracking-wide ${guestViewMode === 'edit'
+                                        ? 'border-forest-green bg-forest-green/10 text-forest-green'
+                                        : 'border-dusty-green/30 text-dark-slate/70 hover:bg-pale-sage/30'}`}
+                                >
+                                    Edit
+                                </button>
+                                <button
+                                    type='button'
+                                    onClick={() => setGuestViewMode('preview')}
+                                    className={`h-10 rounded-lg border text-xs font-bold uppercase tracking-wide ${guestViewMode === 'preview'
+                                        ? 'border-dark-slate bg-dark-slate/10 text-dark-slate'
+                                        : 'border-dusty-green/30 text-dark-slate/70 hover:bg-pale-sage/30'}`}
+                                >
+                                    Preview
+                                </button>
+                            </div>
+                            <p className='text-[11px] text-dark-slate/60'>
+                                Edit mode shows interactive zones. Preview mode shows final placement.
+                            </p>
+                        </div>
+
+                        <div className='space-y-2'>
+                            <h3 className='font-bold text-dark-slate text-sm uppercase tracking-wide'>
+                                Download & Share
+                            </h3>
+                            <div className='grid grid-cols-2 gap-2'>
+                                <button
+                                    type='button'
+                                    onClick={() => handleDownload('png')}
+                                    disabled={!canDownload || isDownloading}
+                                    className='h-10 rounded-lg bg-forest-green text-white text-xs font-bold uppercase tracking-wide disabled:opacity-50 disabled:cursor-not-allowed'
+                                >
+                                    {isDownloading ? 'Preparing...' : 'Download PNG'}
+                                </button>
+                                <button
+                                    type='button'
+                                    onClick={() => handleDownload('jpg')}
+                                    disabled={!canDownload || isDownloading}
+                                    className='h-10 rounded-lg border border-forest-green text-forest-green text-xs font-bold uppercase tracking-wide disabled:opacity-50 disabled:cursor-not-allowed'
+                                >
+                                    Download JPG
+                                </button>
+                            </div>
+                            {!canDownload && (
+                                <p className='text-[11px] text-dark-slate/60'>
+                                    Add a photo or text first to enable download.
+                                </p>
+                            )}
+                            <p className='text-[11px] text-dark-slate/60'>
+                                Total downloads: {downloadCount}
+                            </p>
+                            {downloadError && (
+                                <p className='text-xs text-red-600'>{downloadError}</p>
+                            )}
+                            <div className='grid grid-cols-5 gap-1.5'>
+                                {[
+                                    { id: 'whatsapp', icon: 'mdi:whatsapp' },
+                                    { id: 'facebook', icon: 'mdi:facebook' },
+                                    { id: 'x', icon: 'mdi:twitter' },
+                                    { id: 'linkedin', icon: 'mdi:linkedin' },
+                                    { id: 'telegram', icon: 'mdi:telegram' },
+                                ].map((social) => (
+                                    <button
+                                        key={social.id}
+                                        type='button'
+                                        onClick={() => openShareIntent(social.id)}
+                                        className='h-9 rounded-lg border border-dusty-green/30 bg-white text-dark-slate hover:bg-pale-sage/30 flex items-center justify-center'
+                                        aria-label={`Share on ${social.id}`}
+                                    >
+                                        <Icon icon={social.icon} width='16' height='16' />
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
 
                         {/* No Zones Available */}
                         {!canSubmit && (
@@ -294,12 +719,12 @@ const PublicEventDP = () => {
             {/* Submission Form Overlay */}
             {canSubmit && selectedZoneIndex && (
                 <GuestSubmissionForm
-                    eventDP={eventDP}
                     selectedZoneIndex={selectedZoneIndex}
                     onPhotoSubmit={handlePhotoSubmit}
                     onTextSubmit={handleTextSubmit}
                     onClose={() => setSelectedZoneIndex(null)}
                     isLoading={submitting}
+                    initialText={activeTextValue}
                 />
             )}
         </main>

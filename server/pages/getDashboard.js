@@ -41,15 +41,17 @@ const getDashboard = (req, res) => {
                     return res.status(404).json({ status: false, message: "User not found" })
                 }
 
-                const baseQuery = { userEmail: email }
-                let searchQuery = baseQuery
+                const activeBaseQuery = { userEmail: email, isDeleted: { $ne: true } }
+                const historyBaseQuery = { userEmail: email }
+                let searchQuery = activeBaseQuery
+                let historySearchQuery = historyBaseQuery
 
                 if (hasSearch) {
                     // Prefer MongoDB text index search (inverted index) for fast lookup.
                     let textMatches = []
                     try {
                         textMatches = await EventDPDraft.find({
-                            ...baseQuery,
+                            ...activeBaseQuery,
                             $text: { $search: search },
                         }).select('_id')
                     } catch (textSearchErr) {
@@ -58,18 +60,26 @@ const getDashboard = (req, res) => {
 
                     if (textMatches.length > 0) {
                         searchQuery = {
-                            ...baseQuery,
+                            ...activeBaseQuery,
                             _id: { $in: textMatches.map((item) => item._id) },
                         }
                     } else {
                         const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
                         searchQuery = {
-                            ...baseQuery,
+                            ...activeBaseQuery,
                             $or: [
                                 { title: { $regex: escaped, $options: 'i' } },
                                 { 'asset.originalFilename': { $regex: escaped, $options: 'i' } },
                             ],
                         }
+                    }
+
+                    historySearchQuery = {
+                        ...historyBaseQuery,
+                        $or: [
+                            { title: { $regex: search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' } },
+                            { 'asset.originalFilename': { $regex: search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' } },
+                        ],
                     }
                 }
 
@@ -78,13 +88,13 @@ const getDashboard = (req, res) => {
                         .sort({ 'publish.publishedAt': -1, updatedAt: -1 })
                         .limit(6)
                         .select('title asset publish status createdAt updatedAt'),
-                    EventDPDraft.find(searchQuery)
+                    EventDPDraft.find(historySearchQuery)
                         .sort({ updatedAt: -1 })
-                        .limit(20)
-                        .select('title status publish history asset updatedAt createdAt'),
+                        .limit(40)
+                        .select('title status publish history asset updatedAt createdAt isDeleted'),
                 ])
 
-                const totalEventsUsed = await EventDPDraft.countDocuments({ userEmail: email })
+                const totalEventsUsed = await EventDPDraft.countDocuments(activeBaseQuery)
 
                 const recentEventDPs = recentPublished.map((item) => ({
                     id: String(item._id),
@@ -105,6 +115,7 @@ const getDashboard = (req, res) => {
                             action: entry.action,
                             at: entry.at,
                             status: draft.status,
+                            deleted: Boolean(draft.isDeleted),
                             name: draft.title || draft.asset?.originalFilename || `EventDP ${String(draft._id).slice(-6)}`,
                             publicUrl: draft.publish?.publicUrl || '',
                         }))

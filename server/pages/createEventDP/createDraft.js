@@ -1,5 +1,6 @@
 const EventDPDraft = require('../../models/eventDPDraft.model')
 const { z } = require('zod')
+const normalizeEditor = require('./normalizeEditor')
 
 const MAX_HOST_EVENTS = 5
 
@@ -28,8 +29,12 @@ const createDraft = async (req, res) => {
         }
 
         const { title, asset, editor } = parsed.data
+        const normalizedEditor = normalizeEditor(editor || {}, asset)
 
-        const existingEventsCount = await EventDPDraft.countDocuments({ userEmail: req.user.email })
+        const existingEventsCount = await EventDPDraft.countDocuments({
+            userEmail: req.user.email,
+            isDeleted: { $ne: true },
+        })
         if (existingEventsCount >= MAX_HOST_EVENTS) {
             return res.status(403).json({
                 status: false,
@@ -55,7 +60,7 @@ const createDraft = async (req, res) => {
                 bytes: Number(asset.bytes) || 0,
                 originalFilename: asset.originalFilename || '',
             },
-            editor: editor || {},
+            editor: normalizedEditor,
             history: [
                 {
                     action: 'created',

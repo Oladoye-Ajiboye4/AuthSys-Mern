@@ -1,6 +1,7 @@
 const crypto = require('crypto')
 const EventDPDraft = require('../../models/eventDPDraft.model')
 const { z } = require('zod')
+const normalizeEditor = require('./normalizeEditor')
 
 const publishSchema = z.object({
     editor: z.record(z.string(), z.unknown()).optional(),
@@ -49,7 +50,11 @@ const publishDraft = async (req, res) => {
 
         const { editor, baseRevision, lastClientEditAt, title, expiresAt } = parsed.data
 
-        const draft = await EventDPDraft.findOne({ _id: draftId, userEmail: req.user.email })
+        const draft = await EventDPDraft.findOne({
+            _id: draftId,
+            userEmail: req.user.email,
+            isDeleted: { $ne: true },
+        })
 
         if (!draft) {
             return res.status(404).json({ status: false, message: 'Draft not found' })
@@ -64,7 +69,7 @@ const publishDraft = async (req, res) => {
         }
 
         if (editor) {
-            draft.editor = editor
+            draft.editor = normalizeEditor(editor, draft.asset)
         }
 
         if (title) {

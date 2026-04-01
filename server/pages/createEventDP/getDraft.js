@@ -3,7 +3,11 @@ const EventDPDraft = require('../../models/eventDPDraft.model')
 const getDraft = async (req, res) => {
     try {
         const { draftId } = req.params
-        const draft = await EventDPDraft.findOne({ _id: draftId, userEmail: req.user.email })
+        const draft = await EventDPDraft.findOne({
+            _id: draftId,
+            userEmail: req.user.email,
+            isDeleted: { $ne: true },
+        })
 
         if (!draft) {
             return res.status(404).json({ status: false, message: 'Draft not found' })

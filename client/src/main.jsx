@@ -13,6 +13,7 @@ import ResetPassword from "./pages/auth/resetPassword/ResetPassword.jsx";
 import CreateEventDP from "./pages/create_EventDP/CreateEventDP.jsx";
 import PublicEventDP from "./pages/publicEventDP/PublicEventDP.jsx";
 import Settings from "./pages/settings/Settings.jsx";
+import LearningGuide from "./pages/learningGuide/LearningGuide.jsx";
 
 
 const router = createBrowserRouter([
@@ -43,6 +44,10 @@ const router = createBrowserRouter([
   {
     path: "/settings",
     element: <Settings />,
+  },
+  {
+    path: "/learning-guide",
+    element: <LearningGuide />,
   },
   {
     path: "/reset-password",

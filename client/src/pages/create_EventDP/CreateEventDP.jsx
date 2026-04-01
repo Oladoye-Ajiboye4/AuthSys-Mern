@@ -1,6 +1,7 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Icon } from '@iconify/react'
 import { z } from 'zod'
+import { useSearchParams } from 'react-router'
 import TopNav from './components/TopNav'
 import StudioSidebar from './components/StudioSidebar'
 import CanvasToolbar from './components/CanvasToolbar'
@@ -12,6 +13,7 @@ import { LEFT_NAV_ITEMS } from './constants'
 import {
     autosaveDraft,
     createDraft,
+    getDraft,
     publishDraft,
     requestUploadSignature,
     uploadToCloudinary,
@@ -28,7 +30,27 @@ const publishExpirySchema = z
     .min(1, 'Select when the link should expire')
     .refine((value) => !Number.isNaN(new Date(value).getTime()), 'Invalid expiry date')
 
+const ACTIVE_DRAFT_STORAGE_KEY = 'eventdp.activeDraftId'
+
+const serializeEditorSnapshot = (editor = {}) => JSON.stringify({
+    zoneShape: editor.zoneShape || 'square',
+    committedZone: editor.committedZone || null,
+    textZones: Array.isArray(editor.textZones) ? editor.textZones : [],
+    activeTextZoneIndex: Number.isInteger(editor.activeTextZoneIndex) ? editor.activeTextZoneIndex : null,
+    bleedGuides: typeof editor.bleedGuides === 'boolean' ? editor.bleedGuides : true,
+    backgroundOpacity: Number.isFinite(editor.backgroundOpacity) ? editor.backgroundOpacity : 85,
+    cornerRadius: Number.isFinite(editor.cornerRadius) ? editor.cornerRadius : 16,
+    borderStyle: editor.borderStyle || '',
+    snapToGrid: Boolean(editor.snapToGrid),
+    allowGuestText: Boolean(editor.allowGuestText),
+    activeCanvasTool: editor.activeCanvasTool || 'photo',
+    guestTextStyle: editor.guestTextStyle || {},
+    zoom: Number.isFinite(editor.zoom) ? editor.zoom : 1,
+    activeMenu: editor.activeMenu || 'template',
+})
+
 const CreateEventDP = () => {
+    const [searchParams] = useSearchParams()
     const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
     const [draftMeta, setDraftMeta] = useState({ draftId: null, revision: 0, uploadAsset: null })
     const [publishState, setPublishState] = useState('draft')
@@ -39,18 +61,21 @@ const CreateEventDP = () => {
     const [titleError, setTitleError] = useState('')
     const [linkExpiresAt, setLinkExpiresAt] = useState('')
     const [publishError, setPublishError] = useState('')
+    const [isLoadingDraft, setIsLoadingDraft] = useState(false)
 
     const uploadKeyRef = useRef('')
     const autosaveTimerRef = useRef(null)
     const latestDraftMetaRef = useRef(draftMeta)
     const lastSavedSnapshotRef = useRef('')
     const saveInFlightRef = useRef(false)
+    const isHydratingDraftRef = useRef(false)
     const [lastSavedTime, setLastSavedTime] = useState(null)
     const isEditorLocked = publishState === 'published' || publishState === 'publishing'
+    const requestedDraftId = searchParams.get('draft') || searchParams.get('draftId') || ''
 
-    const normalizeTitle = (value) => value.trim().replace(/\s+/g, ' ')
+    const normalizeTitle = useCallback((value) => value.trim().replace(/\s+/g, ' '), [])
 
-    const getValidTitle = () => {
+    const getValidTitle = useCallback(() => {
         const parsed = titleSchema.safeParse(projectTitle)
         if (!parsed.success) {
             const fallback = 'Untitled Project'
@@ -60,7 +85,7 @@ const CreateEventDP = () => {
 
         setTitleError('')
         return normalizeTitle(parsed.data)
-    }
+    }, [normalizeTitle, projectTitle])
 
     const getValidPublishExpiry = () => {
         const parsed = publishExpirySchema.safeParse(linkExpiresAt)
@@ -129,11 +154,113 @@ const CreateEventDP = () => {
         removeUploadedImage,
         displayedCanvasSize,
         draftSnapshot,
+        hydrateDraft,
     } = useCreateEventDPState()
 
     useEffect(() => {
         latestDraftMetaRef.current = draftMeta
     }, [draftMeta])
+
+    useEffect(() => {
+        if (draftMeta.draftId) {
+            localStorage.setItem(ACTIVE_DRAFT_STORAGE_KEY, draftMeta.draftId)
+        }
+    }, [draftMeta.draftId])
+
+    useEffect(() => {
+        const token = localStorage.getItem('token')
+        const fallbackDraftId = localStorage.getItem(ACTIVE_DRAFT_STORAGE_KEY) || ''
+
+        // Determine if this is a page reload or fresh navigation
+        // If there's a query param (?draft=xxx), always load that draft
+        // If there's no query param and we have a fallback, check if we should load it
+        const navigationEntry = typeof performance !== 'undefined'
+            ? performance.getEntriesByType?.('navigation')?.[0]
+            : null
+        const legacyNavigationType = typeof performance !== 'undefined' ? performance?.navigation?.type : null
+        const isPageReload = navigationEntry?.type === 'reload' || legacyNavigationType === 1
+
+        // Decide which draft to load
+        let draftIdToLoad = ''
+
+        if (requestedDraftId) {
+            // Explicit query param always takes priority
+            draftIdToLoad = requestedDraftId
+        } else if (isPageReload && fallbackDraftId) {
+            // Only load recent draft if this is a page reload (not navigation)
+            draftIdToLoad = fallbackDraftId
+        } else if (!isPageReload) {
+            // Fresh navigation without query param = create new draft
+            // Clear the active draft ID so we start fresh
+            localStorage.removeItem(ACTIVE_DRAFT_STORAGE_KEY)
+        }
+
+        if (!token || !draftIdToLoad) {
+            return
+        }
+
+        let cancelled = false
+
+        const restoreDraft = async () => {
+            setIsLoadingDraft(true)
+            isHydratingDraftRef.current = true
+
+            try {
+                const response = await getDraft({ token, draftId: draftIdToLoad })
+                const draft = response?.draft
+                if (!draft) {
+                    throw new Error('Draft payload missing')
+                }
+
+                if (cancelled) {
+                    return
+                }
+
+                hydrateDraft({ asset: draft.asset, editor: draft.editor })
+
+                setProjectTitle(draft.title || 'Untitled Project')
+                setDraftMeta({
+                    draftId: draft._id,
+                    revision: draft.revision || 1,
+                    uploadAsset: draft.asset || null,
+                })
+                setPublishState(draft.status === 'published' ? 'published' : 'draft')
+                setShareLink(draft.publish?.publicUrl || '')
+                setLinkExpiresAt(
+                    draft.publish?.expiresAt
+                        ? new Date(new Date(draft.publish.expiresAt).getTime() - (new Date(draft.publish.expiresAt).getTimezoneOffset() * 60000))
+                            .toISOString()
+                            .slice(0, 16)
+                        : '',
+                )
+                setTitleError('')
+                setPublishError('')
+                setShowShareModal(false)
+                setShowPublishConfirm(false)
+
+                lastSavedSnapshotRef.current = serializeEditorSnapshot(draft.editor)
+            } catch (error) {
+                console.error('Failed to restore draft:', error)
+                if (!requestedDraftId) {
+                    localStorage.removeItem(ACTIVE_DRAFT_STORAGE_KEY)
+                }
+            } finally {
+                if (!cancelled) {
+                    setIsLoadingDraft(false)
+                    setTimeout(() => {
+                        isHydratingDraftRef.current = false
+                    }, 0)
+                }
+            }
+        }
+
+        restoreDraft()
+
+        return () => {
+            cancelled = true
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [requestedDraftId])
 
     useEffect(() => {
         if (!uploadedImage) {
@@ -155,7 +282,7 @@ const CreateEventDP = () => {
         const serializedSnapshot = JSON.stringify(draftSnapshot)
 
         const bootstrapDraft = async () => {
-            if (!uploadedImage?.file || saveInFlightRef.current) {
+            if (!uploadedImage?.file || saveInFlightRef.current || isHydratingDraftRef.current || isLoadingDraft) {
                 return
             }
 
@@ -215,12 +342,12 @@ const CreateEventDP = () => {
         }
 
         bootstrapDraft()
-    }, [uploadedImage, draftSnapshot])
+    }, [uploadedImage, draftSnapshot, isLoadingDraft, getValidTitle])
 
     useEffect(() => {
         const serializedSnapshot = JSON.stringify(draftSnapshot)
 
-        if (!draftMeta.draftId || saveInFlightRef.current || isEditorLocked) {
+        if (!draftMeta.draftId || saveInFlightRef.current || isEditorLocked || isHydratingDraftRef.current || isLoadingDraft) {
             return
         }
 
@@ -256,6 +383,12 @@ const CreateEventDP = () => {
                 lastSavedSnapshotRef.current = serializedSnapshot
                 setLastSavedTime(new Date())
             } catch (error) {
+                if (error?.response?.status === 409 && Number.isInteger(error?.response?.data?.revision)) {
+                    setDraftMeta((prev) => ({
+                        ...prev,
+                        revision: error.response.data.revision,
+                    }))
+                }
                 console.error('Error autosaving draft:', error)
             } finally {
                 saveInFlightRef.current = false
@@ -267,7 +400,7 @@ const CreateEventDP = () => {
                 clearTimeout(autosaveTimerRef.current)
             }
         }
-    }, [draftMeta.draftId, draftSnapshot, isEditorLocked])
+    }, [draftMeta.draftId, draftSnapshot, isEditorLocked, isLoadingDraft, getValidTitle])
 
     useEffect(() => {
         if (!lastSavedTime) {
@@ -401,6 +534,17 @@ const CreateEventDP = () => {
         } finally {
             saveInFlightRef.current = false
         }
+    }
+
+    if (isLoadingDraft && !uploadedImage) {
+        return (
+            <main className='h-screen bg-pale-sage flex items-center justify-center'>
+                <div className='text-center space-y-3'>
+                    <div className='h-12 w-12 rounded-full border-4 border-dusty-green/35 border-t-forest-green animate-spin mx-auto' />
+                    <p className='text-sm font-semibold text-dark-slate'>Restoring your draft...</p>
+                </div>
+            </main>
+        )
     }
 
     return (

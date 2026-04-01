@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from 'react'
 import { computeZoneFromDrag } from './canvasMath'
+import { createZoneCoordinates } from './zoneCoordinates'
 
 const MIN_ZONE_SIZE = 12
 
@@ -12,19 +13,15 @@ const pointInRect = (point, rect) => (
     point.y <= rect.y + rect.height
 )
 
-const toZonePayload = ({ rect, canvasEl, zoneShape }) => {
-    const { normalised } = computeZoneFromDrag({
-        startX: rect.x,
-        startY: rect.y,
-        endX: rect.x + rect.width,
-        endY: rect.y + rect.height,
-        canvasEl,
-    })
+const toZonePayload = ({ rect, zoneShape, canvasDimensions, displayedCanvasSize }) => {
+    // Create all three coordinate types
+    const coordinates = createZoneCoordinates(rect, displayedCanvasSize, canvasDimensions)
 
     return {
         shape: zoneShape,
-        display: rect,
-        normalised,
+        display: coordinates.display,
+        actual: coordinates.actual,
+        normalised: coordinates.normalised,
     }
 }
 
@@ -60,7 +57,7 @@ const resizeRect = ({ startRect, dx, dy, handle, boundsWidth, boundsHeight }) =>
     }
 }
 
-const useZoneSelector = ({ zoneShape, committedZone, onZoneCommit }) => {
+const useZoneSelector = ({ zoneShape, committedZone, onZoneCommit, canvasDimensions, displayedCanvasSize }) => {
     const canvasRef = useRef(null)
     const interactionRef = useRef(null)
 
@@ -89,13 +86,18 @@ const useZoneSelector = ({ zoneShape, committedZone, onZoneCommit }) => {
             return
         }
 
-        const zone = toZonePayload({ rect, canvasEl: canvasRef.current, zoneShape })
+        const zone = toZonePayload({
+            rect,
+            zoneShape,
+            canvasDimensions,
+            displayedCanvasSize,
+        })
         setDraftRect(null)
         setIsInteracting(false)
         interactionRef.current = null
         console.log('[EventDP] Guest photo zone:', zone)
         onZoneCommit?.(zone)
-    }, [onZoneCommit, zoneShape])
+    }, [onZoneCommit, zoneShape, canvasDimensions, displayedCanvasSize])
 
     const onPointerDown = useCallback((event) => {
         const canvasEl = canvasRef.current

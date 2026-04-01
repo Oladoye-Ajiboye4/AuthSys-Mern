@@ -14,6 +14,11 @@ export const primaryNavItems = [
 
 export const secondaryNavItems = [
     {
+        id: 'learning-guide',
+        label: 'Learning Guide',
+        icon: 'mdi:book-open-page-variant-outline',
+    },
+    {
         id: 'settings',
         label: 'Settings',
         icon: 'mdi:cog-outline',

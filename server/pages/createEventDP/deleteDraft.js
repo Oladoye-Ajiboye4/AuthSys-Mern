@@ -22,7 +22,34 @@ const deleteDraft = async (req, res) => {
             return res.status(404).json({ status: false, message: 'Draft not found' })
         }
 
-        await EventDPDraft.deleteOne({ _id: draft._id })
+        if (draft.isDeleted) {
+            return res.status(200).json({
+                status: true,
+                message: 'Draft already deleted',
+                deletedDraftId: String(draft._id),
+            })
+        }
+
+        draft.isDeleted = true
+        draft.deletedAt = new Date()
+        draft.status = 'draft'
+        draft.publish = {
+            slug: '',
+            projectSlug: '',
+            accessKey: '',
+            expiresAt: null,
+            publicUrl: '',
+            publishedAt: null,
+        }
+        draft.history.push({
+            action: 'deleted',
+            at: new Date(),
+            meta: {},
+        })
+        draft.lastServerSaveAt = new Date()
+        draft.revision += 1
+
+        await draft.save()
 
         return res.status(200).json({
             status: true,
