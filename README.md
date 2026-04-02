@@ -1,2 +1,1 @@
-# AuthSys-Mern
 # EventDP
