@@ -1,6 +1,10 @@
 const EventDPDraft = require('../../models/eventDPDraft.model')
 const { z } = require('zod')
 const normalizeEditor = require('./normalizeEditor')
+const {
+    deleteCloudinaryImage,
+    isDraftFolderPublicIdForUser,
+} = require('./cloudinaryAssetCleanup')
 
 const MAX_HOST_EVENTS = 5
 
@@ -30,12 +34,27 @@ const createDraft = async (req, res) => {
 
         const { title, asset, editor } = parsed.data
         const normalizedEditor = normalizeEditor(editor || {}, asset)
+        const assetPublicId = String(asset?.publicId || '').trim()
+
+        if (!isDraftFolderPublicIdForUser(assetPublicId, req.user.email)) {
+            return res.status(400).json({
+                status: false,
+                message: 'Uploaded asset must be from your draft folder',
+            })
+        }
 
         const existingEventsCount = await EventDPDraft.countDocuments({
             userEmail: req.user.email,
             isDeleted: { $ne: true },
         })
         if (existingEventsCount >= MAX_HOST_EVENTS) {
+            // Uploaded image is not usable if we reject draft creation, so free storage immediately.
+            try {
+                await deleteCloudinaryImage(assetPublicId)
+            } catch (cleanupError) {
+                console.error('Cloudinary cleanup after limit rejection failed:', cleanupError)
+            }
+
             return res.status(403).json({
                 status: false,
                 message: `You have reached your storage limit of ${MAX_HOST_EVENTS} EventDP projects. Delete an existing one to create a new project.`,
@@ -52,7 +71,7 @@ const createDraft = async (req, res) => {
             userEmail: req.user.email,
             title: title || asset.originalFilename || 'Untitled Project',
             asset: {
-                publicId: asset.publicId,
+                publicId: assetPublicId,
                 secureUrl: asset.secureUrl,
                 width: Number(asset.width),
                 height: Number(asset.height),
@@ -79,6 +98,15 @@ const createDraft = async (req, res) => {
             draft,
         })
     } catch (err) {
+        const parsed = createDraftSchema.safeParse(req.body)
+        if (parsed.success && parsed.data?.asset?.publicId) {
+            try {
+                await deleteCloudinaryImage(parsed.data.asset.publicId)
+            } catch (cleanupError) {
+                console.error('Cloudinary cleanup after createDraft failure failed:', cleanupError)
+            }
+        }
+
         console.error(err)
         return res.status(500).json({ status: false, message: 'Internal server error' })
     }

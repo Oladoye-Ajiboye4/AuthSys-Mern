@@ -3,6 +3,11 @@ const bcrypt = require('bcryptjs')
 const { z } = require('zod')
 const userModel = require('../models/user.model')
 const EventDPDraft = require('../models/eventDPDraft.model')
+const {
+    deleteCloudinaryImagesBatch,
+    isDraftFolderPublicIdForUser,
+} = require('./createEventDP/cloudinaryAssetCleanup')
+const cloudinary = require('../config/cloudinary')
 
 const deleteAccountSchema = z.object({
     currentPassword: z.string().min(6).optional(),
@@ -49,6 +54,30 @@ const deleteAccount = async (req, res) => {
             if (!passwordMatch) {
                 return res.status(401).json({ status: false, message: 'Current password is incorrect' })
             }
+        }
+
+        const userDrafts = await EventDPDraft.find({ userEmail: email }).select('asset.publicId').lean()
+        const publicIds = userDrafts
+            .map((item) => String(item?.asset?.publicId || '').trim())
+            .filter((publicId) => isDraftFolderPublicIdForUser(publicId, email))
+
+        const deleteBatchResult = await deleteCloudinaryImagesBatch(publicIds)
+        if (deleteBatchResult.failed.length > 0) {
+            return res.status(502).json({
+                status: false,
+                message: 'Failed to remove all Cloudinary images. Please retry account deletion.',
+            })
+        }
+
+        // Remove any remaining uploaded images in this user draft folder (including detached uploads).
+        try {
+            await cloudinary.api.delete_resources_by_prefix(`eventdp/${email}/drafts/`, {
+                resource_type: 'image',
+                type: 'upload',
+                invalidate: true,
+            })
+        } catch (prefixDeleteError) {
+            console.error('Cloudinary prefix cleanup failed on account delete:', prefixDeleteError)
         }
 
         await Promise.all([

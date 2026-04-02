@@ -140,7 +140,6 @@ const manualSignup = (req, res) => {
             console.error("Error registering customer:", err);
         });
 
-    console.log('Password signup', user)
     res.status(201).json({ message: 'Success', user })
 }
 

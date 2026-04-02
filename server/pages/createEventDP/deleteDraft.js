@@ -1,5 +1,9 @@
 const { z } = require('zod')
 const EventDPDraft = require('../../models/eventDPDraft.model')
+const {
+    deleteCloudinaryImage,
+    isDraftFolderPublicIdForUser,
+} = require('./cloudinaryAssetCleanup')
 
 const paramsSchema = z.object({
     draftId: z.string().min(1),
@@ -22,38 +26,21 @@ const deleteDraft = async (req, res) => {
             return res.status(404).json({ status: false, message: 'Draft not found' })
         }
 
-        if (draft.isDeleted) {
-            return res.status(200).json({
-                status: true,
-                message: 'Draft already deleted',
-                deletedDraftId: String(draft._id),
+        const assetPublicId = String(draft?.asset?.publicId || '').trim()
+        if (assetPublicId && !isDraftFolderPublicIdForUser(assetPublicId, req.user.email)) {
+            return res.status(400).json({
+                status: false,
+                message: 'Draft image does not belong to the authenticated user folder',
             })
         }
 
-        draft.isDeleted = true
-        draft.deletedAt = new Date()
-        draft.status = 'draft'
-        draft.publish = {
-            slug: '',
-            projectSlug: '',
-            accessKey: '',
-            expiresAt: null,
-            publicUrl: '',
-            publishedAt: null,
-        }
-        draft.history.push({
-            action: 'deleted',
-            at: new Date(),
-            meta: {},
-        })
-        draft.lastServerSaveAt = new Date()
-        draft.revision += 1
-
-        await draft.save()
+        // Delete cloud image first so we never orphan storage after database deletion.
+        await deleteCloudinaryImage(assetPublicId)
+        await EventDPDraft.deleteOne({ _id: draft._id, userEmail: req.user.email })
 
         return res.status(200).json({
             status: true,
-            message: 'Draft deleted successfully',
+            message: 'Draft and image deleted successfully',
             deletedDraftId: String(draft._id),
         })
     } catch (err) {

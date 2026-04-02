@@ -1,4 +1,8 @@
 const EventDPDraft = require('../../models/eventDPDraft.model')
+const {
+    deleteCloudinaryImage,
+    isDraftFolderPublicIdForUser,
+} = require('./cloudinaryAssetCleanup')
 
 const deleteEventDP = async (req, res) => {
     try {
@@ -21,11 +25,20 @@ const deleteEventDP = async (req, res) => {
             })
         }
 
+        const assetPublicId = String(draft?.asset?.publicId || '').trim()
+        if (assetPublicId && !isDraftFolderPublicIdForUser(assetPublicId, userEmail)) {
+            return res.status(400).json({
+                status: false,
+                message: 'Draft image does not belong to the authenticated user folder',
+            })
+        }
+
+        await deleteCloudinaryImage(assetPublicId)
         await EventDPDraft.findByIdAndDelete(draftId)
 
         return res.json({
             status: true,
-            message: 'EventDP deleted successfully',
+            message: 'EventDP and image deleted successfully',
         })
     } catch (error) {
         console.error('Error deleting EventDP:', error)
