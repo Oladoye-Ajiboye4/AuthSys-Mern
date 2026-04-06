@@ -85,7 +85,7 @@ const Footer = () => {
 
         {/* Footer Bottom */}
         <div className="pt-8 border-t border-gray-800 flex flex-col md:flex-row justify-between items-center gap-4 text-sm text-gray-500">
-          <p>© 2024 EventDP Inc. All rights reserved.</p>
+          <p>© {new Date().getFullYear()} EventDP Inc. All rights reserved.</p>
           <div className="flex gap-6">
             <a href="/signin" className="hover:text-gray-300 transition-colors">
               Privacy Policy
