@@ -2,12 +2,22 @@ import React from 'react'
 import { Icon } from '@iconify/react'
 import { LEFT_NAV_ITEMS } from '../constants'
 
-const StudioSidebar = ({ activeMenu, onMenuChange }) => {
+const StudioSidebar = ({ activeMenu, onMenuChange, onCollapse }) => {
     return (
         <aside className='w-72 bg-dark-slate text-white flex-col border-r border-white/10 hidden lg:flex animate-slide-in-left'>
-            <div className='p-6'>
-                <h2 className='font-bold text-2xl'>Design Studio</h2>
-                <p className='text-xs text-white/45 tracking-[0.16em] uppercase mt-1'>Event Frame Generator</p>
+            <div className='p-6 flex items-start justify-between gap-3'>
+                <div>
+                    <h2 className='font-bold text-2xl'>Design Studio</h2>
+                    <p className='text-xs text-white/45 tracking-[0.16em] uppercase mt-1'>Event Frame Generator</p>
+                </div>
+                <button
+                    type='button'
+                    onClick={onCollapse}
+                    className='h-9 w-9 rounded-lg border border-white/15 text-white/80 hover:text-white hover:bg-white/10 transition-colors flex items-center justify-center'
+                    aria-label='Hide design studio sidebar'
+                >
+                    <Icon icon='mdi:chevron-left' width='20' height='20' />
+                </button>
             </div>
 
             <div className='flex-1 px-4 space-y-2'>

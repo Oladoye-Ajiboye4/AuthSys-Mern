@@ -13,9 +13,9 @@ const TopNav = ({
     isTitleLocked,
 }) => {
     return (
-        <nav className='min-h-16 px-4 sm:px-6 py-2 flex items-center justify-between bg-white border-b border-dusty-green/25 z-40 animate-fade-in gap-3'>
-            <div className='flex items-center gap-6'>
-                <h1 className='font-extrabold text-xl tracking-tight text-forest-green'>EventDP</h1>
+        <nav className='min-h-16 px-2.5 sm:px-6 py-2 flex items-center justify-between bg-white border-b border-dusty-green/25 z-40 animate-fade-in gap-1.5 sm:gap-3'>
+            <div className='flex items-center gap-2.5 sm:gap-6 min-w-0'>
+                <h1 className='font-extrabold text-base sm:text-xl tracking-tight text-forest-green'>EventDP</h1>
                 <Link
                     to='/dashboard'
                     className='hidden sm:inline-flex items-center text-sm font-medium text-dark-slate/75 hover:text-forest-green transition-colors'
@@ -37,19 +37,19 @@ const TopNav = ({
                 {titleError ? <span className='text-[11px] text-red-600 mt-1'>{titleError}</span> : null}
             </div>
 
-            <div className='flex items-center gap-3'>
+            <div className='flex items-center gap-1.5 sm:gap-3'>
                 {showGenerateLink && (
                     <button
                         type='button'
                         onClick={onGenerateLink}
                         disabled={isGenerating || isPublished}
-                        className='px-4 py-2 rounded-xl bg-forest-green text-white font-semibold text-sm hover:-translate-y-0.5 transition-all shadow-lg shadow-forest-green/20 disabled:opacity-55 disabled:hover:translate-y-0 disabled:cursor-not-allowed'
+                        className='px-2.5 sm:px-4 py-2 rounded-xl bg-forest-green text-white font-semibold text-[11px] sm:text-sm hover:-translate-y-0.5 transition-all shadow-lg shadow-forest-green/20 disabled:opacity-55 disabled:hover:translate-y-0 disabled:cursor-not-allowed whitespace-nowrap'
                     >
-                        {isGenerating ? 'Generating...' : (isPublished ? 'Published' : 'Generate Link')}
+                        {isGenerating ? 'Generating...' : (isPublished ? 'Published' : 'Generate')}
                     </button>
                 )}
-                <div className='w-10 h-10 rounded-full border-2 border-forest-green/25 bg-white overflow-hidden flex items-center justify-center'>
-                    <Icon icon='mdi:account' width='21' height='21' className='text-forest-green' />
+                <div className='w-9 h-9 sm:w-10 sm:h-10 rounded-full border-2 border-forest-green/25 bg-white overflow-hidden flex items-center justify-center shrink-0'>
+                    <Icon icon='mdi:account' width='19' height='19' className='text-forest-green sm:w-[21px] sm:h-[21px]' />
                 </div>
             </div>
         </nav>

@@ -157,6 +157,7 @@ const CanvasStage = ({
     allowGuestText,
     activeCanvasTool,
     guestTextStyle,
+    showMobileToolSwitch = false,
     disabled,
 }) => {
     const fileInputRef = useRef(null)
@@ -197,7 +198,7 @@ const CanvasStage = ({
             {/* Dotted workspace background */}
             <div className='absolute inset-0 bg-[radial-gradient(rgba(144,171,139,0.35)_0.8px,transparent_0.8px)] bg-size-[20px_20px]' />
 
-            <div className='relative h-full w-full flex items-center justify-center p-6 sm:p-10 lg:p-16'>
+            <div className='relative h-full w-full flex items-center justify-center p-3 pt-16 sm:p-10 lg:p-16'>
                 {/* Canvas frame */}
                 <div
                     className='bg-white shadow-2xl ring-1 ring-black/5 overflow-hidden transition-all duration-500 animate-scale-in select-none'
@@ -274,10 +275,10 @@ const CanvasStage = ({
                             data-zone-control='true'
                             type='button'
                             onClick={onRemove}
-                            className='absolute top-3 right-3 h-9 w-9 rounded-full bg-dark-slate/80 text-white flex items-center justify-center hover:bg-dark-slate transition-colors'
+                            className='absolute top-2.5 right-2.5 sm:top-3 sm:right-3 h-10 w-10 sm:h-9 sm:w-9 rounded-full bg-dark-slate/80 text-white flex items-center justify-center hover:bg-dark-slate transition-colors'
                             aria-label='Remove image'
                         >
-                            <Icon icon='mdi:close' width='18' height='18' />
+                            <Icon icon='mdi:close' width='18' height='18' className='sm:w-[18px] sm:h-[18px]' />
                         </button>
                     )}
 
@@ -287,7 +288,7 @@ const CanvasStage = ({
                             data-zone-control='true'
                             type='button'
                             onClick={() => onClearTextZone(activeTextZoneIndex)}
-                            className='absolute top-3 left-3 h-7 px-2 rounded-full bg-[#2d3857]/85 text-white text-[10px] font-semibold flex items-center gap-1 hover:bg-[#2d3857] transition-colors'
+                            className='absolute top-2.5 left-2.5 sm:top-3 sm:left-3 h-9 sm:h-7 px-3 sm:px-2 rounded-full bg-[#2d3857]/85 text-white text-[10px] sm:text-[10px] font-semibold flex items-center gap-1 hover:bg-[#2d3857] transition-colors'
                             aria-label='Clear text zone'
                         >
                             <Icon icon='mdi:format-textbox-remove-outline' width='13' height='13' />
@@ -300,7 +301,7 @@ const CanvasStage = ({
                             data-zone-control='true'
                             type='button'
                             onClick={onClearZone}
-                            className='absolute top-3 left-3 h-7 px-2 rounded-full bg-dark-slate/75 text-white text-[10px] font-semibold flex items-center gap-1 hover:bg-dark-slate transition-colors'
+                            className='absolute top-2.5 left-2.5 sm:top-3 sm:left-3 h-9 sm:h-7 px-3 sm:px-2 rounded-full bg-dark-slate/75 text-white text-[10px] sm:text-[10px] font-semibold flex items-center gap-1 hover:bg-dark-slate transition-colors'
                             aria-label='Clear zone'
                         >
                             <Icon icon='mdi:selection-remove' width='13' height='13' />
@@ -310,7 +311,7 @@ const CanvasStage = ({
 
                     {/* Canvas info badge */}
                     {!previewMode && (
-                        <div className='absolute left-3 bottom-3 rounded-md bg-dark-slate/70 text-white text-[10px] px-2 py-1 tracking-wide pointer-events-none'>
+                        <div className='absolute left-2.5 bottom-2.5 sm:left-3 sm:bottom-3 rounded-md bg-dark-slate/70 text-white text-[9px] sm:text-[10px] px-2 py-1 tracking-wide pointer-events-none max-w-[calc(100%-0.9rem)]'>
                             {canvasDimensions.width} × {canvasDimensions.height}px
                             {disabled && ' • published and locked'}
                             {!isTextTool && canDraw && !committedZone && ' • drag to place photo zone'}
@@ -332,13 +333,13 @@ const CanvasStage = ({
 
             {/* Draw-mode hint ribbon */}
             {canDraw && !isTextTool && !committedZone && (
-                <div className='absolute bottom-4 left-1/2 -translate-x-1/2 bg-dark-slate/80 text-white text-xs font-medium px-4 py-2 rounded-full pointer-events-none animate-fade-in-up'>
+                <div className={`absolute ${showMobileToolSwitch ? 'bottom-24' : 'bottom-20'} xl:bottom-4 left-1/2 -translate-x-1/2 bg-dark-slate/80 text-white text-[11px] sm:text-xs font-medium px-4 py-2 rounded-full pointer-events-none animate-fade-in-up max-w-[calc(100%-1.2rem)] text-center leading-tight`}>
                     Drag on the image to mark where guests upload their photo
                 </div>
             )}
 
             {canDraw && isTextTool && !selectedTextZone && (
-                <div className='absolute bottom-4 left-1/2 -translate-x-1/2 bg-[#2d3857]/88 text-white text-xs font-medium px-4 py-2 rounded-full pointer-events-none animate-fade-in-up'>
+                <div className={`absolute ${showMobileToolSwitch ? 'bottom-24' : 'bottom-20'} xl:bottom-4 left-1/2 -translate-x-1/2 bg-[#2d3857]/88 text-white text-[11px] sm:text-xs font-medium px-4 py-2 rounded-full pointer-events-none animate-fade-in-up max-w-[calc(100%-1.2rem)] text-center leading-tight`}>
                     Drag on the image to place the guest custom text area
                 </div>
             )}

@@ -266,10 +266,15 @@ const Settings = () => {
 
         if (item?.id === 'dashboard') {
             navigate('/dashboard')
+            return
         }
 
         if (item?.id === 'settings') {
             navigate('/settings')
+        }
+        if (item?.id === 'learning-guide') {
+            navigate('/learning-guide')
+            return
         }
     }
 

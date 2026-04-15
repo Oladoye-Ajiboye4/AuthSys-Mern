@@ -7,7 +7,6 @@ import StudioSidebar from './components/StudioSidebar'
 import CanvasToolbar from './components/CanvasToolbar'
 import CanvasStage from './components/CanvasStage'
 import SettingsPanel from './components/SettingsPanel'
-import MobileControlsPanel from './components/MobileControlsPanel'
 import useCreateEventDPState from './logic/useCreateEventDPState'
 import { LEFT_NAV_ITEMS } from './constants'
 import {
@@ -52,6 +51,8 @@ const serializeEditorSnapshot = (editor = {}) => JSON.stringify({
 const CreateEventDP = () => {
     const [searchParams] = useSearchParams()
     const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
+    const [desktopSidebarOpen, setDesktopSidebarOpen] = useState(true)
+    const [mobileSettingsOpen, setMobileSettingsOpen] = useState(false)
     const [draftMeta, setDraftMeta] = useState({ draftId: null, revision: 0, uploadAsset: null })
     const [publishState, setPublishState] = useState('draft')
     const [showPublishConfirm, setShowPublishConfirm] = useState(false)
@@ -72,6 +73,7 @@ const CreateEventDP = () => {
     const [lastSavedTime, setLastSavedTime] = useState(null)
     const isEditorLocked = publishState === 'published' || publishState === 'publishing'
     const requestedDraftId = searchParams.get('draft') || searchParams.get('draftId') || ''
+    const showMobileToolSwitch = Boolean(uploadedImage) && allowGuestText && !mobileSidebarOpen && !mobileSettingsOpen
 
     const normalizeTitle = useCallback((value) => value.trim().replace(/\s+/g, ' '), [])
 
@@ -130,11 +132,8 @@ const CreateEventDP = () => {
         maxTextZones,
         canvasDimensions,
         backgroundOpacity,
-        setOpacity,
         cornerRadius,
         setRadius,
-        snapToGrid,
-        toggleSnapToGrid,
         allowGuestText,
         toggleGuestText,
         activeCanvasTool,
@@ -538,7 +537,7 @@ const CreateEventDP = () => {
 
     if (isLoadingDraft && !uploadedImage) {
         return (
-            <main className='h-screen bg-pale-sage flex items-center justify-center'>
+            <main className='min-h-[100dvh] h-[100dvh] bg-pale-sage flex items-center justify-center'>
                 <div className='text-center space-y-3'>
                     <div className='h-12 w-12 rounded-full border-4 border-dusty-green/35 border-t-forest-green animate-spin mx-auto' />
                     <p className='text-sm font-semibold text-dark-slate'>Restoring your draft...</p>
@@ -548,7 +547,7 @@ const CreateEventDP = () => {
     }
 
     return (
-        <main className='h-screen bg-pale-sage flex flex-col overflow-hidden'>
+        <main className='min-h-[100dvh] h-[100dvh] bg-pale-sage flex flex-col overflow-hidden'>
             <TopNav
                 showGenerateLink={Boolean(uploadedImage)}
                 onGenerateLink={handleGenerateLinkClick}
@@ -560,7 +559,7 @@ const CreateEventDP = () => {
                 isTitleLocked={isEditorLocked}
             />
 
-            <div className='md:hidden px-4 py-2 border-b border-dusty-green/20 bg-white'>
+            <div className='md:hidden px-3 py-2 border-b border-dusty-green/20 bg-white'>
                 <input
                     type='text'
                     value={projectTitle}
@@ -574,7 +573,7 @@ const CreateEventDP = () => {
             </div>
 
             {/* Autosave Status Indicator */}
-            <div className='fixed top-20 right-6 z-30 flex items-center gap-1.5 text-xs font-medium'>
+            <div className='fixed top-[7rem] right-2.5 md:top-20 md:right-6 z-30 flex items-center gap-1.5 text-[11px] sm:text-xs font-medium'>
                 {saveInFlightRef.current && (
                     <div className='flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-forest-green/90 text-white animate-pulse'>
                         <div className='w-1.5 h-1.5 rounded-full bg-white animate-pulse' />
@@ -590,12 +589,33 @@ const CreateEventDP = () => {
             </div>
 
             <div className='flex flex-1 overflow-hidden relative'>
-                <StudioSidebar activeMenu={activeMenu} onMenuChange={setActiveMenu} />
+                {desktopSidebarOpen && (
+                    <StudioSidebar
+                        activeMenu={activeMenu}
+                        onMenuChange={setActiveMenu}
+                        onCollapse={() => setDesktopSidebarOpen(false)}
+                    />
+                )}
+
+                {!desktopSidebarOpen && (
+                    <button
+                        type='button'
+                        onClick={() => setDesktopSidebarOpen(true)}
+                        className='hidden lg:flex absolute top-4 left-4 z-40 h-11 px-3 rounded-xl bg-dark-slate text-white border border-white/15 shadow-lg items-center gap-2'
+                        aria-label='Show design studio sidebar'
+                    >
+                        <Icon icon='mdi:menu-open' width='20' height='20' />
+                        <span className='text-xs font-semibold uppercase tracking-wide'>Design Studio</span>
+                    </button>
+                )}
 
                 <button
                     type='button'
-                    onClick={() => setMobileSidebarOpen(true)}
-                    className='lg:hidden absolute top-4 left-4 z-40 h-10 w-10 rounded-xl bg-white border border-dusty-green/30 shadow-md flex items-center justify-center'
+                    onClick={() => {
+                        setMobileSettingsOpen(false)
+                        setMobileSidebarOpen(true)
+                    }}
+                    className='lg:hidden absolute top-3 left-3 z-40 h-10 w-10 rounded-xl bg-white border border-dusty-green/30 shadow-md flex items-center justify-center'
                     aria-label='Open tools'
                 >
                     <Icon icon='mdi:menu' width='21' height='21' />
@@ -608,7 +628,7 @@ const CreateEventDP = () => {
                             onClick={() => setMobileSidebarOpen(false)}
                         ></div>
 
-                        <div className='lg:hidden fixed left-0 top-0 h-full w-[84%] max-w-[320px] bg-dark-slate text-white z-50 p-5 animate-slide-in-left'>
+                        <div className='lg:hidden fixed left-0 top-0 h-full w-[84%] max-w-[320px] bg-dark-slate text-white z-50 p-5 animate-slide-in-left overflow-y-auto'>
                             <div className='flex items-center justify-between mb-5'>
                                 <h2 className='font-bold text-xl'>Design Studio</h2>
                                 <button
@@ -644,7 +664,7 @@ const CreateEventDP = () => {
                     </>
                 )}
 
-                <section className='flex-1 relative overflow-hidden items-center justify-center flex'>
+                <section className={`flex-1 relative overflow-hidden items-center justify-center flex ${showMobileToolSwitch ? 'pb-28' : 'pb-24'} xl:pb-0`}>
                     <CanvasToolbar
                         canUndo={canUndo}
                         canRedo={canRedo}
@@ -679,6 +699,7 @@ const CreateEventDP = () => {
                         allowGuestText={allowGuestText}
                         activeCanvasTool={activeCanvasTool}
                         guestTextStyle={guestTextStyle}
+                        showMobileToolSwitch={showMobileToolSwitch}
                         disabled={isEditorLocked}
                     />
                 </section>
@@ -709,25 +730,94 @@ const CreateEventDP = () => {
                     />
                 )}
 
-                <MobileControlsPanel
-                    zoneShape={zoneShape}
-                    zoneShapes={zoneShapes}
-                    onSelectZoneShape={selectZoneShape}
-                    committedZone={committedZone}
-                    onClearZone={clearCommittedZone}
-                    backgroundOpacity={backgroundOpacity}
-                    onOpacityChange={setOpacity}
-                    cornerRadius={cornerRadius}
-                    onRadiusChange={setRadius}
-                    snapToGrid={snapToGrid}
-                    onToggleSnap={toggleSnapToGrid}
-                    disabled={isEditorLocked}
-                />
+                {uploadedImage && (
+                    <>
+                        {showMobileToolSwitch && (
+                            <div className='xl:hidden fixed left-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-40 flex items-center rounded-full bg-white/95 backdrop-blur border border-dusty-green/30 shadow-lg p-1'>
+                                <button
+                                    type='button'
+                                    onClick={() => selectCanvasTool('photo')}
+                                    disabled={isEditorLocked}
+                                    className={`h-10 px-3 rounded-full text-[10px] font-bold uppercase tracking-wide flex items-center gap-1.5 transition-colors disabled:opacity-55 disabled:cursor-not-allowed ${activeCanvasTool === 'photo'
+                                        ? 'bg-forest-green text-white'
+                                        : 'text-dark-slate hover:bg-pale-sage'}`}
+                                    aria-label='Switch to photo zone tool'
+                                >
+                                    <Icon icon='mdi:image-area' width='15' height='15' />
+                                    Photo
+                                </button>
+                                <button
+                                    type='button'
+                                    onClick={() => selectCanvasTool('text')}
+                                    disabled={isEditorLocked}
+                                    className={`h-10 px-3 rounded-full text-[10px] font-bold uppercase tracking-wide flex items-center gap-1.5 transition-colors disabled:opacity-55 disabled:cursor-not-allowed ${activeCanvasTool === 'text'
+                                        ? 'bg-[#2d3857] text-white'
+                                        : 'text-dark-slate hover:bg-pale-sage'}`}
+                                    aria-label='Switch to text zone tool'
+                                >
+                                    <Icon icon='mdi:format-text-rotation-none' width='15' height='15' />
+                                    Text
+                                </button>
+                            </div>
+                        )}
+
+                        {!mobileSidebarOpen && (
+                            <button
+                                type='button'
+                                onClick={() => {
+                                    setMobileSidebarOpen(false)
+                                    setMobileSettingsOpen(true)
+                                }}
+                                className={`xl:hidden fixed right-3 ${showMobileToolSwitch ? 'bottom-[calc(3.85rem+env(safe-area-inset-bottom))]' : 'bottom-[calc(0.75rem+env(safe-area-inset-bottom))]'} z-40 h-11 px-3.5 rounded-full bg-dark-slate text-white shadow-lg flex items-center gap-1.5`}
+                                aria-label='Open full design settings'
+                            >
+                                <Icon icon='mdi:tune-vertical-variant' width='18' height='18' />
+                                <span className='text-[10px] font-semibold uppercase tracking-wide'>Settings</span>
+                            </button>
+                        )}
+
+                        {mobileSettingsOpen && (
+                            <>
+                                <div
+                                    className='xl:hidden fixed inset-0 z-40 bg-dark-slate/45'
+                                    onClick={() => setMobileSettingsOpen(false)}
+                                />
+                                <div className='xl:hidden fixed right-0 top-0 h-full w-full max-w-[430px] z-50'>
+                                    <SettingsPanel
+                                        zoneShapes={zoneShapes}
+                                        zoneShape={zoneShape}
+                                        onSelectZoneShape={selectZoneShape}
+                                        committedZone={committedZone}
+                                        onClearZone={clearCommittedZone}
+                                        canvasDimensions={canvasDimensions}
+                                        cornerRadius={cornerRadius}
+                                        onRadiusChange={setRadius}
+                                        allowGuestText={allowGuestText}
+                                        onToggleGuestText={toggleGuestText}
+                                        activeCanvasTool={activeCanvasTool}
+                                        onSelectCanvasTool={selectCanvasTool}
+                                        textZones={textZones}
+                                        activeTextZoneIndex={activeTextZoneIndex}
+                                        onSelectTextZone={selectTextZone}
+                                        onAddTextZone={addTextZone}
+                                        maxTextZones={maxTextZones}
+                                        onClearTextZone={clearTextZone}
+                                        guestTextStyle={guestTextStyle}
+                                        onGuestTextStyleChange={updateGuestTextStyle}
+                                        disabled={isEditorLocked}
+                                        className='w-full h-full bg-white border-l border-dusty-green/25 flex flex-col overflow-y-auto overscroll-contain animate-slide-in-right pb-[calc(5.5rem+env(safe-area-inset-bottom))]'
+                                        onClose={() => setMobileSettingsOpen(false)}
+                                    />
+                                </div>
+                            </>
+                        )}
+                    </>
+                )}
             </div>
 
             {showPublishConfirm && (
-                <div className='fixed inset-0 z-50 bg-dark-slate/55 flex items-center justify-center p-4'>
-                    <div className='w-full max-w-md rounded-2xl bg-white shadow-2xl p-6 space-y-4'>
+                <div className='fixed inset-0 z-50 bg-dark-slate/55 flex items-center justify-center p-3 sm:p-4'>
+                    <div className='w-full max-w-md rounded-2xl bg-white shadow-2xl p-4 sm:p-6 space-y-4'>
                         <h3 className='text-lg font-bold text-dark-slate'>Publish and Generate Link?</h3>
                         <p className='text-sm text-dark-slate/70'>
                             This will lock canvas editing and settings for this EventDP. You can still share the generated link anytime.
@@ -744,18 +834,18 @@ const CreateEventDP = () => {
                             <p className='text-[11px] text-dark-slate/60 mt-1'>Maximum expiry window is 365 days.</p>
                         </div>
                         {publishError ? <p className='text-sm text-red-600'>{publishError}</p> : null}
-                        <div className='flex items-center justify-end gap-2'>
+                        <div className='flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2'>
                             <button
                                 type='button'
                                 onClick={() => setShowPublishConfirm(false)}
-                                className='h-10 px-4 rounded-xl border border-dusty-green/35 text-dark-slate font-semibold'
+                                className='h-10 px-4 rounded-xl border border-dusty-green/35 text-dark-slate font-semibold w-full sm:w-auto'
                             >
                                 Cancel
                             </button>
                             <button
                                 type='button'
                                 onClick={handlePublish}
-                                className='h-10 px-4 rounded-xl bg-forest-green text-white font-semibold'
+                                className='h-10 px-4 rounded-xl bg-forest-green text-white font-semibold w-full sm:w-auto'
                             >
                                 Publish & Generate
                             </button>
@@ -765,8 +855,8 @@ const CreateEventDP = () => {
             )}
 
             {showShareModal && (
-                <div className='fixed inset-0 z-50 bg-dark-slate/55 flex items-center justify-center p-4'>
-                    <div className='w-full max-w-xl rounded-2xl bg-white shadow-2xl p-6 space-y-5'>
+                <div className='fixed inset-0 z-50 bg-dark-slate/55 flex items-center justify-center p-3 sm:p-4'>
+                    <div className='w-full max-w-xl rounded-2xl bg-white shadow-2xl p-4 sm:p-6 space-y-4 sm:space-y-5'>
                         <div className='flex items-start justify-between gap-4'>
                             <div>
                                 <h3 className='text-lg font-bold text-dark-slate'>Your EventDP Link Is Ready</h3>

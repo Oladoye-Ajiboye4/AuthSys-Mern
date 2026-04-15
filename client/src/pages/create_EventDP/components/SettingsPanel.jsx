@@ -47,15 +47,29 @@ const SettingsPanel = ({
     guestTextStyle,
     onGuestTextStyleChange,
     disabled,
+    className,
+    onClose,
 }) => {
     const zoneEntries = Object.entries(zoneShapes)
 
     return (
-        <aside className={`w-80 bg-white border-l border-dusty-green/25 flex-col overflow-y-auto hidden xl:flex animate-slide-in-right ${disabled ? 'opacity-70' : ''}`}>
+        <aside className={`${className || 'w-80 bg-white border-l border-dusty-green/25 flex-col overflow-y-auto hidden xl:flex animate-slide-in-right'} ${disabled ? 'opacity-70' : ''}`}>
             <fieldset disabled={disabled} className='contents'>
-                <div className='p-6 border-b border-dusty-green/15'>
-                    <p className='text-[10px] font-bold text-forest-green tracking-[0.15em] uppercase mb-1'>Design Properties</p>
-                    <h3 className='font-bold text-2xl text-dark-slate'>Template Settings</h3>
+                <div className='p-6 border-b border-dusty-green/15 flex items-start justify-between gap-3'>
+                    <div>
+                        <p className='text-[10px] font-bold text-forest-green tracking-[0.15em] uppercase mb-1'>Design Properties</p>
+                        <h3 className='font-bold text-2xl text-dark-slate'>Template Settings</h3>
+                    </div>
+                    {onClose && (
+                        <button
+                            type='button'
+                            onClick={onClose}
+                            className='h-9 w-9 rounded-lg border border-dusty-green/35 text-dark-slate/75 hover:bg-pale-sage transition-colors'
+                            aria-label='Close settings panel'
+                        >
+                            <Icon icon='mdi:close' width='18' height='18' className='mx-auto' />
+                        </button>
+                    )}
                 </div>
 
                 {/* ── Guest Photo Zone ────────────────────────────────────────── */}
