@@ -86,6 +86,9 @@ const ZoneOverlay = ({
                         style={{
                             fontFamily: textStyle.fontFamily,
                             fontWeight: textStyle.fontWeight,
+                            fontStyle: textStyle.fontStyle,
+                            textDecoration: textStyle.textDecoration,
+                            textTransform: textStyle.textTransform,
                             fontSize: `${Math.max(12, Math.min(textStyle.fontSize * 0.52, rect.height * 0.35))}px`,
                             lineHeight: textStyle.lineHeight,
                             letterSpacing: `${Math.max(-1, Math.min(textStyle.letterSpacing, 3))}px`,
@@ -106,6 +109,9 @@ const ZoneOverlay = ({
                             style={{
                                 fontFamily: textStyle.fontFamily,
                                 fontWeight: textStyle.fontWeight,
+                                fontStyle: textStyle.fontStyle,
+                                textDecoration: textStyle.textDecoration,
+                                textTransform: textStyle.textTransform,
                                 fontSize: `${Math.max(11, Math.min(textStyle.fontSize * 0.48, rect.height * 0.32))}px`,
                                 lineHeight: textStyle.lineHeight,
                                 letterSpacing: `${textStyle.letterSpacing}px`,

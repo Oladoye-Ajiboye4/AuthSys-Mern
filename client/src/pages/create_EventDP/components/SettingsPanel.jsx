@@ -1,25 +1,17 @@
-import React from 'react'
+import React, { useMemo, useState } from 'react'
 import { Icon } from '@iconify/react'
-
-const TEXT_FONT_OPTIONS = [
-    'Poppins',
-    'Playfair Display',
-    'Space Grotesk',
-    'Merriweather',
-    'Montserrat',
-]
-
-const TEXT_WEIGHT_OPTIONS = [
-    { value: 400, label: 'Regular' },
-    { value: 500, label: 'Medium' },
-    { value: 600, label: 'Semi Bold' },
-    { value: 700, label: 'Bold' },
-]
 
 const TEXT_ALIGN_OPTIONS = [
     { value: 'left', icon: 'mdi:format-align-left' },
     { value: 'center', icon: 'mdi:format-align-center' },
     { value: 'right', icon: 'mdi:format-align-right' },
+]
+
+const TEXT_TRANSFORM_OPTIONS = [
+    { value: 'none', label: 'Normal' },
+    { value: 'uppercase', label: 'UPPERCASE' },
+    { value: 'lowercase', label: 'lowercase' },
+    { value: 'capitalize', label: 'Capitalize' },
 ]
 
 const SettingsPanel = ({
@@ -46,11 +38,28 @@ const SettingsPanel = ({
     onClearTextZone,
     guestTextStyle,
     onGuestTextStyleChange,
+    fontOptions,
+    fontWeightOptions,
+    fontCatalogError,
     disabled,
     className,
     onClose,
 }) => {
     const zoneEntries = Object.entries(zoneShapes)
+    const safeFontOptions = Array.isArray(fontOptions) && fontOptions.length > 0
+        ? fontOptions
+        : [guestTextStyle.fontFamily || 'Poppins']
+    const safeWeightOptions = Array.isArray(fontWeightOptions) && fontWeightOptions.length > 0
+        ? fontWeightOptions
+        : [{ value: guestTextStyle.fontWeight || 700, label: String(guestTextStyle.fontWeight || 700) }]
+    const [fontQuery, setFontQuery] = useState('')
+
+    // Filter fonts by query (case-insensitive)
+    const filteredFontOptions = useMemo(() => {
+        if (!fontQuery) return safeFontOptions
+        const q = fontQuery.trim().toLowerCase()
+        return safeFontOptions.filter((f) => String(f || '').toLowerCase().includes(q))
+    }, [safeFontOptions, fontQuery])
 
     return (
         <aside className={`${className || 'w-80 bg-white border-l border-dusty-green/25 flex-col overflow-y-auto hidden xl:flex animate-slide-in-right'} ${disabled ? 'opacity-70' : ''}`}>
@@ -257,6 +266,18 @@ const SettingsPanel = ({
                                     maxLength={90}
                                     onChange={(event) => onGuestTextStyleChange({ text: event.target.value.slice(0, 90) })}
                                     className='w-full rounded-xl border border-dusty-green/35 bg-pale-sage/50 px-3 py-2 text-xs text-dark-slate outline-none focus:border-forest-green'
+                                    style={{
+                                        fontFamily: guestTextStyle.fontFamily,
+                                        fontWeight: guestTextStyle.fontWeight,
+                                        fontStyle: guestTextStyle.fontStyle,
+                                        textDecoration: guestTextStyle.textDecoration,
+                                        textTransform: guestTextStyle.textTransform,
+                                        fontSize: `${Math.max(12, Math.min(Number(guestTextStyle.fontSize) || 12, 26))}px`,
+                                        color: guestTextStyle.color,
+                                        letterSpacing: `${guestTextStyle.letterSpacing}px`,
+                                        lineHeight: guestTextStyle.lineHeight,
+                                        textAlign: guestTextStyle.textAlign,
+                                    }}
                                     rows={3}
                                     placeholder='Type sample text shown in preview'
                                 />
@@ -265,15 +286,31 @@ const SettingsPanel = ({
                             <div className='grid grid-cols-2 gap-2'>
                                 <label className='space-y-1'>
                                     <span className='text-[10px] font-semibold text-dark-slate/65 uppercase'>Font</span>
-                                    <select
-                                        value={guestTextStyle.fontFamily}
-                                        onChange={(event) => onGuestTextStyleChange({ fontFamily: event.target.value })}
-                                        className='w-full h-9 rounded-lg border border-dusty-green/35 bg-white px-2 text-xs text-dark-slate outline-none focus:border-forest-green'
-                                    >
-                                        {TEXT_FONT_OPTIONS.map((font) => (
-                                            <option key={font} value={font}>{font}</option>
-                                        ))}
-                                    </select>
+                                    <div className='relative'>
+                                        <input
+                                            type='search'
+                                            value={fontQuery}
+                                            onChange={(e) => setFontQuery(e.target.value)}
+                                            placeholder='Search fonts…'
+                                            className='w-full h-9 rounded-lg border border-dusty-green/35 bg-white px-3 text-xs text-dark-slate outline-none focus:border-forest-green'
+                                        />
+                                        <select
+                                            value={guestTextStyle.fontFamily}
+                                            onChange={(event) => onGuestTextStyleChange({ fontFamily: event.target.value })}
+                                            className='w-full h-9 rounded-lg border border-dusty-green/35 bg-white px-2 text-xs text-dark-slate outline-none focus:border-forest-green mt-2'
+                                        >
+                                            {filteredFontOptions.length > 0 ? (
+                                                filteredFontOptions.map((font) => (
+                                                    <option key={font} value={font}>{font}</option>
+                                                ))
+                                            ) : (
+                                                <option value={guestTextStyle.fontFamily || ''} disabled>No fonts found</option>
+                                            )}
+                                        </select>
+                                    </div>
+                                    {fontCatalogError ? (
+                                        <p className='text-[10px] text-red-600'>{fontCatalogError}</p>
+                                    ) : null}
                                 </label>
                                 <label className='space-y-1'>
                                     <span className='text-[10px] font-semibold text-dark-slate/65 uppercase'>Weight</span>
@@ -282,7 +319,7 @@ const SettingsPanel = ({
                                         onChange={(event) => onGuestTextStyleChange({ fontWeight: Number(event.target.value) })}
                                         className='w-full h-9 rounded-lg border border-dusty-green/35 bg-white px-2 text-xs text-dark-slate outline-none focus:border-forest-green'
                                     >
-                                        {TEXT_WEIGHT_OPTIONS.map((weight) => (
+                                        {safeWeightOptions.map((weight) => (
                                             <option key={weight.value} value={weight.value}>{weight.label}</option>
                                         ))}
                                     </select>
@@ -297,8 +334,8 @@ const SettingsPanel = ({
                                     </div>
                                     <input
                                         type='range'
-                                        min='16'
-                                        max='72'
+                                        min='12'
+                                        max='220'
                                         value={guestTextStyle.fontSize}
                                         onChange={(event) => onGuestTextStyleChange({ fontSize: Number(event.target.value) })}
                                         className='w-full accent-forest-green h-1.5'
@@ -348,6 +385,64 @@ const SettingsPanel = ({
                                     onChange={(event) => onGuestTextStyleChange({ lineHeight: Number(event.target.value) })}
                                     className='w-full accent-forest-green h-1.5'
                                 />
+                            </div>
+
+                            <div className='space-y-2'>
+                                <span className='text-[10px] font-semibold text-dark-slate/65 uppercase'>Text Style</span>
+                                <div className='grid grid-cols-3 gap-2'>
+                                    <button
+                                        type='button'
+                                        onClick={() => onGuestTextStyleChange({
+                                            fontStyle: guestTextStyle.fontStyle === 'italic' ? 'normal' : 'italic',
+                                        })}
+                                        className={`h-9 rounded-lg border flex items-center justify-center text-xs font-semibold ${guestTextStyle.fontStyle === 'italic'
+                                            ? 'border-2 border-forest-green bg-forest-green/10 text-forest-green'
+                                            : 'border-dusty-green/40 text-dark-slate/70 hover:bg-pale-sage'}`}
+                                        aria-pressed={guestTextStyle.fontStyle === 'italic'}
+                                        title='Italic'
+                                    >
+                                        <span className='italic'>I</span>
+                                    </button>
+                                    <button
+                                        type='button'
+                                        onClick={() => onGuestTextStyleChange({
+                                            textDecoration: guestTextStyle.textDecoration === 'underline' ? 'none' : 'underline',
+                                        })}
+                                        className={`h-9 rounded-lg border flex items-center justify-center text-xs font-semibold ${guestTextStyle.textDecoration === 'underline'
+                                            ? 'border-2 border-forest-green bg-forest-green/10 text-forest-green'
+                                            : 'border-dusty-green/40 text-dark-slate/70 hover:bg-pale-sage'}`}
+                                        aria-pressed={guestTextStyle.textDecoration === 'underline'}
+                                        title='Underline'
+                                    >
+                                        <span className='underline'>U</span>
+                                    </button>
+                                    <button
+                                        type='button'
+                                        onClick={() => onGuestTextStyleChange({
+                                            textDecoration: guestTextStyle.textDecoration === 'line-through' ? 'none' : 'line-through',
+                                        })}
+                                        className={`h-9 rounded-lg border flex items-center justify-center text-xs font-semibold ${guestTextStyle.textDecoration === 'line-through'
+                                            ? 'border-2 border-forest-green bg-forest-green/10 text-forest-green'
+                                            : 'border-dusty-green/40 text-dark-slate/70 hover:bg-pale-sage'}`}
+                                        aria-pressed={guestTextStyle.textDecoration === 'line-through'}
+                                        title='Strikethrough'
+                                    >
+                                        <span className='line-through'>S</span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className='space-y-1'>
+                                <span className='text-[10px] font-semibold text-dark-slate/65 uppercase'>Case</span>
+                                <select
+                                    value={guestTextStyle.textTransform}
+                                    onChange={(event) => onGuestTextStyleChange({ textTransform: event.target.value })}
+                                    className='w-full h-9 rounded-lg border border-dusty-green/35 bg-white px-2 text-xs text-dark-slate outline-none focus:border-forest-green'
+                                >
+                                    {TEXT_TRANSFORM_OPTIONS.map((option) => (
+                                        <option key={option.value} value={option.value}>{option.label}</option>
+                                    ))}
+                                </select>
                             </div>
 
                             <div className='space-y-2'>

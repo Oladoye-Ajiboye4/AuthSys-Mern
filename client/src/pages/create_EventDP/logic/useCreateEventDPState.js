@@ -27,6 +27,9 @@ const DEFAULT_GUEST_TEXT_STYLE = {
     letterSpacing: 0,
     lineHeight: 1.25,
     fontWeight: 700,
+    fontStyle: 'normal',
+    textDecoration: 'none',
+    textTransform: 'none',
     textAlign: 'center',
 }
 
@@ -52,15 +55,27 @@ const DEFAULT_EDITOR_STATE = {
 const normalizeTextStyle = (style) => {
     const next = { ...style }
     next.text = String(next.text || '').slice(0, 90)
-    next.fontSize = clamp(Number(next.fontSize) || DEFAULT_GUEST_TEXT_STYLE.fontSize, 16, 72)
+    next.fontSize = clamp(Number(next.fontSize) || DEFAULT_GUEST_TEXT_STYLE.fontSize, 12, 220)
     next.letterSpacing = clamp(Number(next.letterSpacing) || 0, -1, 12)
     next.lineHeight = clamp(Number(next.lineHeight) || DEFAULT_GUEST_TEXT_STYLE.lineHeight, 0.9, 2)
 
-    const allowedWeights = [400, 500, 600, 700]
-    const normalizedWeight = Number(next.fontWeight)
-    next.fontWeight = allowedWeights.includes(normalizedWeight)
-        ? normalizedWeight
-        : DEFAULT_GUEST_TEXT_STYLE.fontWeight
+    const normalizedWeight = Math.round((Number(next.fontWeight) || DEFAULT_GUEST_TEXT_STYLE.fontWeight) / 100) * 100
+    next.fontWeight = clamp(normalizedWeight, 100, 900)
+
+    const allowedFontStyles = ['normal', 'italic']
+    next.fontStyle = allowedFontStyles.includes(next.fontStyle)
+        ? next.fontStyle
+        : DEFAULT_GUEST_TEXT_STYLE.fontStyle
+
+    const allowedDecorations = ['none', 'underline', 'line-through']
+    next.textDecoration = allowedDecorations.includes(next.textDecoration)
+        ? next.textDecoration
+        : DEFAULT_GUEST_TEXT_STYLE.textDecoration
+
+    const allowedTransforms = ['none', 'uppercase', 'lowercase', 'capitalize']
+    next.textTransform = allowedTransforms.includes(next.textTransform)
+        ? next.textTransform
+        : DEFAULT_GUEST_TEXT_STYLE.textTransform
 
     const allowedAlignments = ['left', 'center', 'right']
     next.textAlign = allowedAlignments.includes(next.textAlign)

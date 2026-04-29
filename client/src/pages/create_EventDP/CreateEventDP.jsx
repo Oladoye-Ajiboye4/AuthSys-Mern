@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react'
 import { Icon } from '@iconify/react'
 import { z } from 'zod'
 import { useSearchParams } from 'react-router'
@@ -12,11 +12,13 @@ import { LEFT_NAV_ITEMS } from './constants'
 import {
     autosaveDraft,
     createDraft,
+    getFontCatalog,
     getDraft,
     publishDraft,
     requestUploadSignature,
     uploadToCloudinary,
 } from './logic/draftSync'
+import { ensureGoogleFontLoaded, getFallbackWeights } from './logic/fontLoader'
 
 const titleSchema = z
     .string()
@@ -63,6 +65,8 @@ const CreateEventDP = () => {
     const [linkExpiresAt, setLinkExpiresAt] = useState('')
     const [publishError, setPublishError] = useState('')
     const [isLoadingDraft, setIsLoadingDraft] = useState(false)
+    const [fontCatalog, setFontCatalog] = useState([])
+    const [fontCatalogError, setFontCatalogError] = useState('')
 
     const uploadKeyRef = useRef('')
     const autosaveTimerRef = useRef(null)
@@ -156,6 +160,87 @@ const CreateEventDP = () => {
     } = useCreateEventDPState()
 
     const showMobileToolSwitch = Boolean(uploadedImage) && allowGuestText && !mobileSidebarOpen && !mobileSettingsOpen
+
+    const fontVariantsByFamily = useMemo(() => {
+        return fontCatalog.reduce((acc, entry) => {
+            const family = String(entry?.family || '').trim()
+            if (!family) {
+                return acc
+            }
+
+            const variants = Array.isArray(entry?.variants)
+                ? entry.variants
+                    .map((weight) => Number(weight))
+                    .filter((weight) => Number.isInteger(weight) && weight >= 100 && weight <= 900)
+                    .sort((a, b) => a - b)
+                : []
+
+            acc[family] = variants.length > 0 ? Array.from(new Set(variants)) : getFallbackWeights()
+            return acc
+        }, {})
+    }, [fontCatalog])
+
+    const dynamicWeightOptions = useMemo(() => {
+        const selectedFamily = guestTextStyle?.fontFamily
+        const variants = fontVariantsByFamily[selectedFamily] || getFallbackWeights()
+        return variants.map((value) => ({ value, label: String(value) }))
+    }, [fontVariantsByFamily, guestTextStyle?.fontFamily])
+
+    useEffect(() => {
+        let isMounted = true
+
+        const fetchFontCatalog = async () => {
+            try {
+                setFontCatalogError('')
+                const response = await getFontCatalog()
+                const fonts = Array.isArray(response?.data?.fonts) ? response.data.fonts : []
+                if (!isMounted) {
+                    return
+                }
+
+                setFontCatalog(fonts)
+            } catch (error) {
+                if (!isMounted) {
+                    return
+                }
+
+                console.error(error)
+                setFontCatalogError('Unable to load font catalog right now.')
+                setFontCatalog([])
+            }
+        }
+
+        fetchFontCatalog()
+
+        return () => {
+            isMounted = false
+        }
+    }, [])
+
+    useEffect(() => {
+        const selectedFamily = String(guestTextStyle?.fontFamily || '').trim()
+        if (!selectedFamily) {
+            return
+        }
+
+        const weights = fontVariantsByFamily[selectedFamily] || [guestTextStyle?.fontWeight || 700]
+        ensureGoogleFontLoaded({ family: selectedFamily, weights })
+    }, [fontVariantsByFamily, guestTextStyle?.fontFamily, guestTextStyle?.fontWeight])
+
+    useEffect(() => {
+        if (!guestTextStyle?.fontFamily) {
+            return
+        }
+
+        const variants = fontVariantsByFamily[guestTextStyle.fontFamily]
+        if (!Array.isArray(variants) || variants.length === 0) {
+            return
+        }
+
+        if (!variants.includes(guestTextStyle.fontWeight)) {
+            updateGuestTextStyle({ fontWeight: variants[variants.length - 1] })
+        }
+    }, [fontVariantsByFamily, guestTextStyle?.fontFamily, guestTextStyle?.fontWeight, updateGuestTextStyle])
 
     useEffect(() => {
         latestDraftMetaRef.current = draftMeta
@@ -538,7 +623,7 @@ const CreateEventDP = () => {
 
     if (isLoadingDraft && !uploadedImage) {
         return (
-            <main className='min-h-[100dvh] h-[100dvh] bg-pale-sage flex items-center justify-center'>
+            <main className='min-h-dvh h-dvh bg-pale-sage flex items-center justify-center'>
                 <div className='text-center space-y-3'>
                     <div className='h-12 w-12 rounded-full border-4 border-dusty-green/35 border-t-forest-green animate-spin mx-auto' />
                     <p className='text-sm font-semibold text-dark-slate'>Restoring your draft...</p>
@@ -548,7 +633,7 @@ const CreateEventDP = () => {
     }
 
     return (
-        <main className='min-h-[100dvh] h-[100dvh] bg-pale-sage flex flex-col overflow-hidden'>
+        <main className='min-h-dvh h-dvh bg-pale-sage flex flex-col overflow-hidden'>
             <TopNav
                 showGenerateLink={Boolean(uploadedImage)}
                 onGenerateLink={handleGenerateLinkClick}
@@ -574,7 +659,7 @@ const CreateEventDP = () => {
             </div>
 
             {/* Autosave Status Indicator */}
-            <div className='fixed top-[7rem] right-2.5 md:top-20 md:right-6 z-30 flex items-center gap-1.5 text-[11px] sm:text-xs font-medium'>
+            <div className='fixed top-28 right-2.5 md:top-20 md:right-6 z-30 flex items-center gap-1.5 text-[11px] sm:text-xs font-medium'>
                 {saveInFlightRef.current && (
                     <div className='flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-forest-green/90 text-white animate-pulse'>
                         <div className='w-1.5 h-1.5 rounded-full bg-white animate-pulse' />
@@ -727,6 +812,9 @@ const CreateEventDP = () => {
                         onClearTextZone={clearTextZone}
                         guestTextStyle={guestTextStyle}
                         onGuestTextStyleChange={updateGuestTextStyle}
+                        fontOptions={fontCatalog.map((item) => item.family)}
+                        fontWeightOptions={dynamicWeightOptions}
+                        fontCatalogError={fontCatalogError}
                         disabled={isEditorLocked}
                     />
                 )}
@@ -805,6 +893,9 @@ const CreateEventDP = () => {
                                         onClearTextZone={clearTextZone}
                                         guestTextStyle={guestTextStyle}
                                         onGuestTextStyleChange={updateGuestTextStyle}
+                                        fontOptions={fontCatalog.map((item) => item.family)}
+                                        fontWeightOptions={dynamicWeightOptions}
+                                        fontCatalogError={fontCatalogError}
                                         disabled={isEditorLocked}
                                         className='w-full h-full bg-white border-l border-dusty-green/25 flex flex-col overflow-y-auto overscroll-contain animate-slide-in-right pb-[calc(5.5rem+env(safe-area-inset-bottom))]'
                                         onClose={() => setMobileSettingsOpen(false)}

@@ -20,6 +20,7 @@ const getDraft = require('./pages/createEventDP/getDraft')
 const publishDraft = require('./pages/createEventDP/publishDraft')
 const getPublicEventDP = require('./pages/createEventDP/getPublicEventDP')
 const incrementPublicDownload = require('./pages/createEventDP/incrementPublicDownload')
+const getFontCatalog = require('./pages/createEventDP/getFontCatalog')
 const { startCloudinaryOrphanCleanupJob } = require('./pages/createEventDP/cloudinaryAssetCleanup')
 const authUser = require('./middleware/authUser')
 
@@ -33,9 +34,9 @@ require('./config/cloudinary')
 startCloudinaryOrphanCleanupJob()
 
 app.use(cors({
-  origin: ['https://event-dp.vercel.app', 'http://localhost:5173'],
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-  credentials: true 
+    origin: ['https://event-dp.vercel.app', 'http://localhost:5173'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+    credentials: true
 }));
 
 app.use(express.json({ limit: '2mb' }))
@@ -67,6 +68,7 @@ app.post('/createEventDP/public/:projectSlug/:accessKey/download', incrementPubl
 app.post('/createEventDP/public/:slug/download', incrementPublicDownload)
 app.get('/createEventDP/public/:projectSlug/:accessKey', getPublicEventDP)
 app.get('/createEventDP/public/:slug', getPublicEventDP)
+app.get('/createEventDP/font-catalog', getFontCatalog)
 
 const getClientBaseUrl = (req) => {
     const origin = req.headers.origin

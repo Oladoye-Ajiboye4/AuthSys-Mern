@@ -101,6 +101,11 @@ export const getPublicEventDP = async ({ slug, projectSlug, accessKey }) => {
     return response.data
 }
 
+export const getFontCatalog = async () => {
+    const response = await axios.get(`${BASE_URL}createEventDP/font-catalog`)
+    return response.data
+}
+
 export const recordPublicDownload = async ({ slug, projectSlug, accessKey }) => {
     const endpoint = accessKey
         ? `${BASE_URL}createEventDP/public/${projectSlug || 'eventdp'}/${accessKey}/download`

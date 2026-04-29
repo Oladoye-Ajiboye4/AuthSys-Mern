@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router'
 import { Icon } from '@iconify/react'
 import { getPublicEventDP, recordPublicDownload } from '../create_EventDP/logic/draftSync'
+import { ensureGoogleFontLoaded } from '../create_EventDP/logic/fontLoader'
 import GuestCanvasDisplay from './components/GuestCanvasDisplay'
 import GuestSubmissionForm from './components/GuestSubmissionForm'
 
@@ -107,19 +108,42 @@ const drawTextIntoZone = (ctx, text, zone, textStyle) => {
     const fontSize = Math.max(14, Math.min(Number(textStyle?.fontSize || 30), height * 0.45))
     const fontFamily = textStyle?.fontFamily || 'Poppins'
     const fontWeight = Number(textStyle?.fontWeight || 700)
+    const fontStyle = textStyle?.fontStyle === 'italic' ? 'italic' : 'normal'
+    const textDecoration = ['none', 'underline', 'line-through'].includes(textStyle?.textDecoration)
+        ? textStyle.textDecoration
+        : 'none'
+    const textTransform = ['none', 'uppercase', 'lowercase', 'capitalize'].includes(textStyle?.textTransform)
+        ? textStyle.textTransform
+        : 'none'
     const lineHeight = Math.max(0.9, Math.min(Number(textStyle?.lineHeight || 1.25), 2))
     const letterSpacing = Number(textStyle?.letterSpacing || 0)
     const align = ['left', 'right', 'center'].includes(textStyle?.textAlign) ? textStyle.textAlign : 'center'
+
+    const normalizeCase = (value) => {
+        const source = String(value || '')
+        if (textTransform === 'uppercase') {
+            return source.toUpperCase()
+        }
+        if (textTransform === 'lowercase') {
+            return source.toLowerCase()
+        }
+        if (textTransform === 'capitalize') {
+            return source.replace(/\b\w/g, (char) => char.toUpperCase())
+        }
+        return source
+    }
+
+    const resolvedText = normalizeCase(text)
 
     ctx.save()
     ctx.fillStyle = textStyle?.color || '#FFFFFF'
     ctx.textAlign = align
     ctx.textBaseline = 'middle'
-    ctx.font = `${fontWeight} ${fontSize}px ${fontFamily}`
+    ctx.font = `${fontStyle} ${fontWeight} ${fontSize}px ${fontFamily}`
     ctx.shadowColor = 'rgba(0,0,0,0.34)'
     ctx.shadowBlur = 8
 
-    const words = String(text).split(/\s+/).filter(Boolean)
+    const words = String(resolvedText).split(/\s+/).filter(Boolean)
     const lines = []
     let currentLine = ''
 
@@ -150,18 +174,48 @@ const drawTextIntoZone = (ctx, text, zone, textStyle) => {
 
     limitedLines.forEach((line, index) => {
         const textY = startY + (index * linePx)
+        const lineWidth = ctx.measureText(line).width + (letterSpacing * Math.max(0, line.length - 1))
+
+        const getLineStartX = () => {
+            if (align === 'left') {
+                return anchorX
+            }
+            if (align === 'right') {
+                return anchorX - lineWidth
+            }
+            return anchorX - (lineWidth / 2)
+        }
+
+        const drawTextDecoration = () => {
+            if (textDecoration === 'none' || !line) {
+                return
+            }
+
+            const startX = getLineStartX()
+            const endX = startX + lineWidth
+            const yOffset = textDecoration === 'underline' ? fontSize * 0.44 : -fontSize * 0.1
+
+            ctx.beginPath()
+            ctx.lineWidth = Math.max(1, fontSize * 0.06)
+            ctx.strokeStyle = textStyle?.color || '#FFFFFF'
+            ctx.moveTo(startX, textY + yOffset)
+            ctx.lineTo(endX, textY + yOffset)
+            ctx.stroke()
+        }
+
         if (!letterSpacing) {
             ctx.fillText(line, anchorX, textY)
+            drawTextDecoration()
             return
         }
 
         if (align === 'center') {
-            const totalLineWidth = ctx.measureText(line).width + (letterSpacing * Math.max(0, line.length - 1))
-            let cursor = anchorX - (totalLineWidth / 2)
+            let cursor = anchorX - (lineWidth / 2)
             for (const char of line) {
                 ctx.fillText(char, cursor, textY)
                 cursor += ctx.measureText(char).width + letterSpacing
             }
+            drawTextDecoration()
             return
         }
 
@@ -174,6 +228,7 @@ const drawTextIntoZone = (ctx, text, zone, textStyle) => {
                 ctx.fillText(char, cursor, textY)
                 cursor -= letterSpacing
             })
+            drawTextDecoration()
             return
         }
 
@@ -182,6 +237,7 @@ const drawTextIntoZone = (ctx, text, zone, textStyle) => {
             ctx.fillText(char, cursor, textY)
             cursor += ctx.measureText(char).width + letterSpacing
         }
+        drawTextDecoration()
     })
 
     ctx.restore()
@@ -275,6 +331,19 @@ const PublicEventDP = () => {
             console.warn('Failed to persist guest draft locally', err)
         }
     }, [eventDP, guestDraftStorageKey, guestPhotoSrc, guestTextByZone, guestViewMode])
+
+    useEffect(() => {
+        const textStyle = eventDP?.editor?.guestTextStyle
+        const family = String(textStyle?.fontFamily || '').trim()
+        if (!family) {
+            return
+        }
+
+        ensureGoogleFontLoaded({
+            family,
+            weights: [Number(textStyle?.fontWeight) || 700],
+        })
+    }, [eventDP])
 
     const handlePhotoSubmit = async (file, onSuccess) => {
         try {
