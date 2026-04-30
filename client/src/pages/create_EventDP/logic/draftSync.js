@@ -115,6 +115,26 @@ export const recordPublicDownload = async ({ slug, projectSlug, accessKey }) => 
     return response.data
 }
 
+export const requestPublicFinalUploadSignature = async ({ slug, projectSlug, accessKey }) => {
+    const endpoint = accessKey
+        ? `${BASE_URL}createEventDP/public/${projectSlug || 'eventdp'}/${accessKey}/final-upload-signature`
+        : `${BASE_URL}createEventDP/public/${slug}/final-upload-signature`
+
+    const response = await axios.post(endpoint)
+
+    return response.data?.data
+}
+
+export const savePublicFinalImage = async ({ slug, projectSlug, accessKey, finalImage }) => {
+    const endpoint = accessKey
+        ? `${BASE_URL}createEventDP/public/${projectSlug || 'eventdp'}/${accessKey}/finalize`
+        : `${BASE_URL}createEventDP/public/${slug}/finalize`
+
+    const response = await axios.post(endpoint, { finalImage })
+
+    return response.data
+}
+
 export const deleteDraft = async ({ token, draftId }) => {
     const response = await axios.delete(
         `${BASE_URL}createEventDP/drafts/${draftId}`,

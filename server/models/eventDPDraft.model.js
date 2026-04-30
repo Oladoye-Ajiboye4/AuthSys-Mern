@@ -11,6 +11,7 @@ const textZoneSchema = new mongoose.Schema({
     actual: { type: zoneSchema, default: null },
     display: { type: zoneSchema, default: null },
     normalised: { type: zoneSchema, default: null },
+    style: { type: mongoose.Schema.Types.Mixed, default: {} },
 }, { _id: false })
 
 const historyEntrySchema = new mongoose.Schema({
@@ -61,6 +62,15 @@ const eventDPDraftSchema = new mongoose.Schema({
         expiresAt: { type: Date, default: null, index: true },
         publicUrl: { type: String, default: '' },
         publishedAt: { type: Date, default: null },
+        finalImage: {
+            publicId: { type: String, default: '' },
+            secureUrl: { type: String, default: '' },
+            width: { type: Number, default: 0 },
+            height: { type: Number, default: 0 },
+            format: { type: String, default: '' },
+            bytes: { type: Number, default: 0 },
+            uploadedAt: { type: Date, default: null },
+        },
     },
     metrics: {
         downloadCount: { type: Number, default: 0 },

@@ -1,32 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { Icon } from '@iconify/react'
 import { fitCanvasToViewport } from '../../create_EventDP/logic/canvasMath'
+import { fitTextLayoutInZone, getTextMeasurementContext, lengthToPx } from '../../create_EventDP/logic/textLayout'
 import { resolveZoneActual, actualToGuestDisplay } from '../../create_EventDP/logic/zoneCoordinates'
-
-const lengthToPx = (value, unit = 'px') => {
-    const parsed = Number.parseFloat(value)
-    if (!Number.isFinite(parsed)) {
-        return 0
-    }
-
-    return unit === 'pt' ? parsed * (96 / 72) : parsed
-}
-
-const resolveLineHeightCss = (style, scale = 1) => {
-    const unit = style?.lineHeightUnit || 'unitless'
-    const value = Number.parseFloat(style?.lineHeight)
-
-    if (!Number.isFinite(value)) {
-        return 1.25
-    }
-
-    if (unit === 'unitless') {
-        return value
-    }
-
-    const pxValue = lengthToPx(value, unit)
-    return `${Math.max(1, pxValue * scale)}px`
-}
 
 const ZoneDisplayOverlay = ({
     rect,
@@ -73,6 +49,9 @@ const ZoneDisplayOverlay = ({
     const isTinyZone = rect.width < 120 || rect.height < 100
     const baseFontSizePx = lengthToPx(textStyle?.fontSize || 16, textStyle?.fontSizeUnit || 'px')
     const baseLetterSpacingPx = lengthToPx(textStyle?.letterSpacing || 0, textStyle?.letterSpacingUnit || 'px')
+    const resolvedLineHeight = textStyle?.lineHeightUnit === 'unitless'
+        ? Number.parseFloat(textStyle?.lineHeight || 1.25) || 1.25
+        : `${Math.max(1, lengthToPx(textStyle?.lineHeight || 0, textStyle?.lineHeightUnit || 'px'))}px`
 
     return (
         <div
@@ -113,9 +92,9 @@ const ZoneDisplayOverlay = ({
                             fontStyle: textStyle?.fontStyle || 'normal',
                             textDecoration: textStyle?.textDecoration || 'none',
                             textTransform: textStyle?.textTransform || 'none',
-                            fontSize: `${Math.max(11, Math.min(baseFontSizePx * 0.5, rect.height * 0.3))}px`,
-                            lineHeight: resolveLineHeightCss(textStyle, 0.5),
-                            letterSpacing: `${Math.max(-2, Math.min(baseLetterSpacingPx * 0.5, 6))}px`,
+                            fontSize: `${Math.max(11, Math.min(baseFontSizePx, rect.height * 0.34))}px`,
+                            lineHeight: resolvedLineHeight,
+                            letterSpacing: `${baseLetterSpacingPx}px`,
                             textAlign: textStyle?.textAlign || 'center',
                             textShadow: '0 2px 8px rgba(0, 0, 0, 0.35)',
                         }}
@@ -157,6 +136,7 @@ const GuestCanvasDisplay = ({
     const containerRef = useRef(null)
     const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 })
     const hasAssetImage = Boolean(eventDP?.asset?.secureUrl)
+    const measurementCtx = getTextMeasurementContext()
 
     const { committedZone, textZones, zoneShape, guestTextStyle, allowGuestText } = eventDP.editor || {}
     const imageDimensions = {
@@ -178,8 +158,8 @@ const GuestCanvasDisplay = ({
             if (!containerRef.current) return
 
             const { width: containerWidth, height: containerHeight } = containerRef.current.getBoundingClientRect()
-            const safeWidth = Math.max(120, containerWidth - 32)
-            const safeHeight = Math.max(160, containerHeight - 32)
+            const safeWidth = Math.max(120, containerWidth - 24)
+            const safeHeight = Math.max(180, containerHeight - 24)
             const scale = Math.min(safeWidth / hostReference.width, safeHeight / hostReference.height, 1)
 
             const displayWidth = hostReference.width * scale
@@ -192,8 +172,21 @@ const GuestCanvasDisplay = ({
         }
 
         calculateCanvasSize()
+
+        const resizeObserver = typeof ResizeObserver !== 'undefined' && containerRef.current
+            ? new ResizeObserver(() => calculateCanvasSize())
+            : null
+
+        if (resizeObserver && containerRef.current) {
+            resizeObserver.observe(containerRef.current)
+        }
+
         window.addEventListener('resize', calculateCanvasSize)
-        return () => window.removeEventListener('resize', calculateCanvasSize)
+
+        return () => {
+            window.removeEventListener('resize', calculateCanvasSize)
+            resizeObserver?.disconnect()
+        }
     }, [hostReference.width, hostReference.height])
 
     // Convert actual image coordinates to display coordinates based on current canvas size
@@ -233,7 +226,7 @@ const GuestCanvasDisplay = ({
             {/* Canvas Container */}
             <div
                 ref={containerRef}
-                className='flex-1 relative overflow-auto flex items-center justify-center p-4 sm:p-6 lg:p-8 bg-[radial-gradient(rgba(144,171,139,0.2)_0.8px,transparent_0.8px)] bg-size-[20px_20px]'
+                className='flex-1 relative overflow-auto flex items-center justify-center p-3 sm:p-4 lg:p-8 bg-[radial-gradient(rgba(144,171,139,0.2)_0.8px,transparent_0.8px)] bg-size-[20px_20px]'
             >
                 {/* Canvas Frame - Using exact pixel dimensions */}
                 {canvasSize.width > 0 && (
@@ -287,9 +280,22 @@ const GuestCanvasDisplay = ({
                             }
 
                             const zoneStyle = textZones?.[idx]?.style || guestTextStyle || {}
-                            const fontSizePx = lengthToPx(zoneStyle?.fontSize || 26, zoneStyle?.fontSizeUnit || 'px')
-                            const letterSpacingPx = lengthToPx(zoneStyle?.letterSpacing || 0, zoneStyle?.letterSpacingUnit || 'px')
                             const canvasScale = canvasSize.width / imageDimensions.width
+                            const layout = fitTextLayoutInZone({
+                                ctx: measurementCtx,
+                                text: submittedText,
+                                width: displayCoords.width / canvasScale,
+                                height: displayCoords.height / canvasScale,
+                                textStyle: zoneStyle,
+                            })
+
+                            if (!layout) {
+                                return null
+                            }
+
+                            const renderFontSizePx = layout.fontSizePx * canvasScale
+                            const renderLineHeightPx = layout.lineHeightPx * canvasScale
+                            const renderLetterSpacingPx = layout.letterSpacingPx * canvasScale
 
                             return (
                                 <div
@@ -306,24 +312,24 @@ const GuestCanvasDisplay = ({
                                     <div
                                         className='w-full h-full wrap-break-word'
                                         style={{
-                                            color: zoneStyle?.color || '#FFFFFF',
-                                            fontFamily: zoneStyle?.fontFamily || 'Poppins',
-                                            fontWeight: zoneStyle?.fontWeight || 700,
-                                            fontStyle: zoneStyle?.fontStyle || 'normal',
-                                            textDecoration: zoneStyle?.textDecoration || 'none',
-                                            textTransform: zoneStyle?.textTransform || 'none',
-                                            fontSize: `${Math.max(10, Math.min(fontSizePx * canvasScale, displayCoords.height * 0.45))}px`,
-                                            lineHeight: resolveLineHeightCss(zoneStyle, canvasScale),
-                                            letterSpacing: `${Math.max(-2, Math.min(letterSpacingPx * canvasScale, 8))}px`,
-                                            textAlign: zoneStyle?.textAlign || 'center',
+                                            color: layout.color,
+                                            fontFamily: layout.fontFamily,
+                                            fontWeight: layout.fontWeight,
+                                            fontStyle: layout.fontStyle,
+                                            textDecoration: layout.textDecoration,
+                                            textTransform: layout.textTransform,
+                                            fontSize: `${renderFontSizePx}px`,
+                                            lineHeight: `${renderLineHeightPx}px`,
+                                            letterSpacing: `${renderLetterSpacingPx}px`,
+                                            textAlign: layout.textAlign,
                                             textShadow: '0 2px 10px rgba(0,0,0,0.35)',
                                             display: 'flex',
                                             alignItems: 'center',
-                                            justifyContent: zoneStyle?.textAlign === 'left' ? 'flex-start' : (zoneStyle?.textAlign === 'right' ? 'flex-end' : 'center'),
-                                            whiteSpace: 'pre-wrap',
+                                            justifyContent: layout.textAlign === 'left' ? 'flex-start' : (layout.textAlign === 'right' ? 'flex-end' : 'center'),
+                                            whiteSpace: 'pre-line',
                                         }}
                                     >
-                                        {submittedText}
+                                        {layout.lines.join('\n')}
                                     </div>
                                 </div>
                             )

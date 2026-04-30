@@ -37,6 +37,7 @@ const resolveZoneForGuest = (zone, asset) => {
     const actual = fromNormalised(zone.normalised, asset) || zone.actual || zone.display || null
     const display = zone.display || zone.actual || null
     const normalised = zone.normalised || null
+    const style = zone.style && typeof zone.style === 'object' ? { ...zone.style } : {}
 
     if (!actual && !display) {
         return null
@@ -46,6 +47,7 @@ const resolveZoneForGuest = (zone, asset) => {
         display: display || actual,
         actual: actual || display,
         normalised: normalised,
+        style,
     }
 }
 
@@ -100,6 +102,17 @@ const getPublicEventDP = async (req, res) => {
                 publicUrl: draft.publish?.publicUrl,
                 publishedAt: draft.publish?.publishedAt,
                 expiresAt: draft.publish?.expiresAt,
+                finalImage: draft.publish?.finalImage
+                    ? {
+                        publicId: draft.publish.finalImage.publicId,
+                        secureUrl: draft.publish.finalImage.secureUrl,
+                        width: draft.publish.finalImage.width,
+                        height: draft.publish.finalImage.height,
+                        format: draft.publish.finalImage.format,
+                        bytes: draft.publish.finalImage.bytes,
+                        uploadedAt: draft.publish.finalImage.uploadedAt,
+                    }
+                    : null,
             },
             metrics: {
                 downloadCount: Number(draft.metrics?.downloadCount || 0),

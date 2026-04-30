@@ -1,10 +1,20 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router'
 import { Icon } from '@iconify/react'
-import { getPublicEventDP, recordPublicDownload } from '../create_EventDP/logic/draftSync'
+import {
+    getPublicEventDP,
+    recordPublicDownload,
+    requestPublicFinalUploadSignature,
+    savePublicFinalImage,
+    uploadToCloudinary,
+} from '../create_EventDP/logic/draftSync'
 import { ensureGoogleFontLoaded } from '../create_EventDP/logic/fontLoader'
+import { fitTextLayoutInZone } from '../create_EventDP/logic/textLayout'
+import { resolveZoneActual } from '../create_EventDP/logic/zoneCoordinates'
 import GuestCanvasDisplay from './components/GuestCanvasDisplay'
 import GuestSubmissionForm from './components/GuestSubmissionForm'
+
+const GUEST_PHOTO_EDITOR_SIZE = 280
 
 const readFileAsDataUrl = (file) => new Promise((resolve, reject) => {
     const reader = new FileReader()
@@ -44,17 +54,7 @@ const loadImageElement = async (src) => {
     }
 }
 
-const getZoneActual = (zone) => {
-    if (zone?.actual) {
-        return zone.actual
-    }
-    if (zone?.display) {
-        return zone.display
-    }
-    return null
-}
-
-const drawImageIntoZone = (ctx, image, zone, zoneShape) => {
+const drawImageIntoZone = (ctx, image, zone, zoneShape, adjustments = null) => {
     const x = Number(zone?.x || 0)
     const y = Number(zone?.y || 0)
     const width = Number(zone?.width || 0)
@@ -64,39 +64,45 @@ const drawImageIntoZone = (ctx, image, zone, zoneShape) => {
         return
     }
 
-    ctx.save()
-
-    if (zoneShape === 'circle') {
-        ctx.beginPath()
-        ctx.ellipse(x + (width / 2), y + (height / 2), width / 2, height / 2, 0, 0, Math.PI * 2)
-        ctx.clip()
-    } else {
-        const radius = Math.min(16, width / 8, height / 8)
-        ctx.beginPath()
-        ctx.moveTo(x + radius, y)
-        ctx.lineTo(x + width - radius, y)
-        ctx.quadraticCurveTo(x + width, y, x + width, y + radius)
-        ctx.lineTo(x + width, y + height - radius)
-        ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height)
-        ctx.lineTo(x + radius, y + height)
-        ctx.quadraticCurveTo(x, y + height, x, y + height - radius)
-        ctx.lineTo(x, y + radius)
-        ctx.quadraticCurveTo(x, y, x + radius, y)
-        ctx.closePath()
-        ctx.clip()
-    }
-
-    const scale = Math.max(width / image.width, height / image.height)
+    const zoom = Math.max(0.1, Number(adjustments?.zoom || 1))
+    const offsetX = Number(adjustments?.offsetX || 0)
+    const offsetY = Number(adjustments?.offsetY || 0)
+    const rotationInRadians = (Number(adjustments?.rotation || 0) * Math.PI) / 180
+    const scale = Math.max(width / image.width, height / image.height) * zoom
     const drawWidth = image.width * scale
     const drawHeight = image.height * scale
-    const drawX = x + ((width - drawWidth) / 2)
-    const drawY = y + ((height - drawHeight) / 2)
+    const scaledOffsetX = offsetX * (width / GUEST_PHOTO_EDITOR_SIZE)
+    const scaledOffsetY = offsetY * (height / GUEST_PHOTO_EDITOR_SIZE)
+    const centerX = x + (width / 2) + scaledOffsetX
+    const centerY = y + (height / 2) + scaledOffsetY
 
-    ctx.drawImage(image, drawX, drawY, drawWidth, drawHeight)
+    ctx.save()
+    ctx.translate(centerX, centerY)
+    ctx.rotate(rotationInRadians)
+
+    ctx.beginPath()
+    if (zoneShape === 'circle') {
+        ctx.ellipse(0, 0, width / 2, height / 2, 0, 0, Math.PI * 2)
+    } else {
+        const radius = Math.min(16, width / 8, height / 8)
+        ctx.moveTo((-width / 2) + radius, -height / 2)
+        ctx.lineTo((width / 2) - radius, -height / 2)
+        ctx.quadraticCurveTo(width / 2, -height / 2, width / 2, (-height / 2) + radius)
+        ctx.lineTo(width / 2, (height / 2) - radius)
+        ctx.quadraticCurveTo(width / 2, height / 2, (width / 2) - radius, height / 2)
+        ctx.lineTo((-width / 2) + radius, height / 2)
+        ctx.quadraticCurveTo(-width / 2, height / 2, -width / 2, (height / 2) - radius)
+        ctx.lineTo(-width / 2, (-height / 2) + radius)
+        ctx.quadraticCurveTo(-width / 2, -height / 2, (-width / 2) + radius, -height / 2)
+        ctx.closePath()
+    }
+    ctx.clip()
+
+    ctx.drawImage(image, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight)
     ctx.restore()
 }
 
-const drawTextIntoZone = (ctx, text, zone, textStyle) => {
+const drawTextIntoZone = (ctx, text, zone, textStyle, exportScale = 1) => {
     const x = Number(zone?.x || 0)
     const y = Number(zone?.y || 0)
     const width = Number(zone?.width || 0)
@@ -104,73 +110,41 @@ const drawTextIntoZone = (ctx, text, zone, textStyle) => {
     if (width <= 6 || height <= 6 || !text) {
         return
     }
+    const layout = fitTextLayoutInZone({
+        ctx,
+        text,
+        width,
+        height,
+        textStyle,
+    })
 
-    const fontSize = Math.max(14, Math.min(Number(textStyle?.fontSize || 30), height * 0.45))
-    const fontFamily = textStyle?.fontFamily || 'Poppins'
-    const fontWeight = Number(textStyle?.fontWeight || 700)
-    const fontStyle = textStyle?.fontStyle === 'italic' ? 'italic' : 'normal'
-    const textDecoration = ['none', 'underline', 'line-through'].includes(textStyle?.textDecoration)
-        ? textStyle.textDecoration
-        : 'none'
-    const textTransform = ['none', 'uppercase', 'lowercase', 'capitalize'].includes(textStyle?.textTransform)
-        ? textStyle.textTransform
-        : 'none'
-    const lineHeight = Math.max(0.9, Math.min(Number(textStyle?.lineHeight || 1.25), 2))
-    const letterSpacing = Number(textStyle?.letterSpacing || 0)
-    const align = ['left', 'right', 'center'].includes(textStyle?.textAlign) ? textStyle.textAlign : 'center'
-
-    const normalizeCase = (value) => {
-        const source = String(value || '')
-        if (textTransform === 'uppercase') {
-            return source.toUpperCase()
-        }
-        if (textTransform === 'lowercase') {
-            return source.toLowerCase()
-        }
-        if (textTransform === 'capitalize') {
-            return source.replace(/\b\w/g, (char) => char.toUpperCase())
-        }
-        return source
+    if (!layout) {
+        return
     }
 
-    const resolvedText = normalizeCase(text)
+    const fontSize = layout.fontSizePx
+    const linePx = layout.lineHeightPx
+    const letterSpacing = layout.letterSpacingPx
+    const align = layout.textAlign
+    const horizontalPadding = 6
+    const verticalPadding = 8
 
     ctx.save()
-    ctx.fillStyle = textStyle?.color || '#FFFFFF'
+    ctx.fillStyle = layout.color
     ctx.textAlign = align
     ctx.textBaseline = 'middle'
-    ctx.font = `${fontStyle} ${fontWeight} ${fontSize}px ${fontFamily}`
+    ctx.font = `${layout.fontStyle} ${layout.fontWeight} ${fontSize}px ${layout.fontFamily}`
     ctx.shadowColor = 'rgba(0,0,0,0.34)'
     ctx.shadowBlur = 8
 
-    const words = String(resolvedText).split(/\s+/).filter(Boolean)
-    const lines = []
-    let currentLine = ''
-
-    words.forEach((word) => {
-        const nextLine = currentLine ? `${currentLine} ${word}` : word
-        const nextWidth = ctx.measureText(nextLine).width + (letterSpacing * Math.max(0, nextLine.length - 1))
-        if (nextWidth > width - 12 && currentLine) {
-            lines.push(currentLine)
-            currentLine = word
-            return
-        }
-        currentLine = nextLine
-    })
-
-    if (currentLine) {
-        lines.push(currentLine)
-    }
-
-    const linePx = fontSize * lineHeight
-    const maxLines = Math.max(1, Math.floor((height - 8) / linePx))
-    const limitedLines = lines.slice(0, maxLines)
+    const maxLines = Math.max(1, Math.floor((height - (verticalPadding * 2)) / linePx))
+    const limitedLines = layout.lines.slice(0, maxLines)
     const totalHeight = limitedLines.length * linePx
     const startY = y + ((height - totalHeight) / 2) + (linePx / 2)
 
     const anchorX = align === 'left'
-        ? x + 6
-        : (align === 'right' ? x + width - 6 : x + (width / 2))
+        ? x + horizontalPadding
+        : (align === 'right' ? x + width - horizontalPadding : x + (width / 2))
 
     limitedLines.forEach((line, index) => {
         const textY = startY + (index * linePx)
@@ -187,17 +161,17 @@ const drawTextIntoZone = (ctx, text, zone, textStyle) => {
         }
 
         const drawTextDecoration = () => {
-            if (textDecoration === 'none' || !line) {
+            if (layout.textDecoration === 'none' || !line) {
                 return
             }
 
             const startX = getLineStartX()
             const endX = startX + lineWidth
-            const yOffset = textDecoration === 'underline' ? fontSize * 0.44 : -fontSize * 0.1
+            const yOffset = layout.textDecoration === 'underline' ? fontSize * 0.44 : -fontSize * 0.1
 
             ctx.beginPath()
             ctx.lineWidth = Math.max(1, fontSize * 0.06)
-            ctx.strokeStyle = textStyle?.color || '#FFFFFF'
+            ctx.strokeStyle = layout.color
             ctx.moveTo(startX, textY + yOffset)
             ctx.lineTo(endX, textY + yOffset)
             ctx.stroke()
@@ -243,6 +217,166 @@ const drawTextIntoZone = (ctx, text, zone, textStyle) => {
     ctx.restore()
 }
 
+const buildFinalCompositeBlob = async ({
+    eventDP,
+    guestPhotoSrc,
+    guestPhotoAdjustments,
+    guestTextByZone,
+    format = 'png',
+}) => {
+    if (typeof document !== 'undefined' && document.fonts) {
+        const fontLoadTimeout = new Promise((_, reject) => (
+            setTimeout(() => reject(new Error('Font loading timeout')), 10000)
+        ))
+        await Promise.race([document.fonts.ready, fontLoadTimeout])
+    }
+
+    const baseImage = await loadImageElement(eventDP.asset.secureUrl)
+    const guestImage = guestPhotoSrc ? await loadImageElement(guestPhotoSrc) : null
+    const baseWidth = Number(eventDP.asset?.width) || 1080
+    const baseHeight = Number(eventDP.asset?.height) || 1920
+
+    const isPortrait = baseHeight >= baseWidth
+    const targetWidth = isPortrait ? 1080 : 1920
+    const targetHeight = isPortrait ? 1920 : 1080
+
+    const scaleFactor = Math.max(
+        1,
+        targetWidth / Math.max(1, baseWidth),
+        targetHeight / Math.max(1, baseHeight),
+    )
+
+    const width = Math.round(baseWidth * scaleFactor)
+    const height = Math.round(baseHeight * scaleFactor)
+
+    const canvas = document.createElement('canvas')
+    canvas.width = width
+    canvas.height = height
+    const ctx = canvas.getContext('2d', { alpha: false })
+
+    if (!ctx) {
+        throw new Error('Unable to prepare canvas context')
+    }
+
+    ctx.imageSmoothingEnabled = true
+    ctx.imageSmoothingQuality = 'high'
+    ctx.fillStyle = '#FFFFFF'
+    ctx.fillRect(0, 0, width, height)
+    ctx.drawImage(baseImage, 0, 0, width, height)
+
+    const imageDimensions = { width: baseWidth, height: baseHeight }
+    const photoZone = resolveZoneActual(eventDP.editor?.committedZone, imageDimensions)
+    if (guestImage && photoZone) {
+        const scaledZone = {
+            x: Number(photoZone.x) * scaleFactor,
+            y: Number(photoZone.y) * scaleFactor,
+            width: Number(photoZone.width) * scaleFactor,
+            height: Number(photoZone.height) * scaleFactor,
+        }
+
+        drawImageIntoZone(ctx, guestImage, scaledZone, eventDP.editor?.zoneShape || 'square', guestPhotoAdjustments)
+    }
+
+    const textZones = Array.isArray(eventDP.editor?.textZones) ? eventDP.editor.textZones : []
+    textZones.forEach((zone, index) => {
+        const submittedText = guestTextByZone[String(index)]
+        if (!submittedText || !String(submittedText).trim()) {
+            return
+        }
+
+        const zoneActual = resolveZoneActual(zone, imageDimensions)
+        if (!zoneActual) {
+            return
+        }
+
+        const zoneStyle = zone?.style || eventDP.editor?.guestTextStyle || {}
+        const scaledZone = {
+            x: Number(zoneActual.x) * scaleFactor,
+            y: Number(zoneActual.y) * scaleFactor,
+            width: Number(zoneActual.width) * scaleFactor,
+            height: Number(zoneActual.height) * scaleFactor,
+        }
+
+        drawTextIntoZone(ctx, submittedText, scaledZone, zoneStyle, scaleFactor)
+    })
+
+    const mimeType = format === 'jpg' ? 'image/jpeg' : 'image/png'
+    const extension = format === 'jpg' ? 'jpg' : 'png'
+    const quality = format === 'jpg' ? 0.95 : 1.0
+
+    const blob = await new Promise((resolve, reject) => {
+        try {
+            canvas.toBlob((result) => {
+                if (result) {
+                    resolve(result)
+                } else {
+                    reject(new Error('Canvas to blob conversion failed'))
+                }
+            }, mimeType, quality)
+        } catch (blobErr) {
+            reject(blobErr)
+        }
+    })
+
+    return {
+        blob,
+        width,
+        height,
+        mimeType,
+        extension,
+    }
+}
+
+const downloadBlob = (blob, fileName) => {
+    const objectUrl = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = objectUrl
+    anchor.download = fileName
+
+    try {
+        document.body.appendChild(anchor)
+        anchor.click()
+        anchor.remove()
+    } finally {
+        URL.revokeObjectURL(objectUrl)
+    }
+}
+
+const downloadImageFromUrl = async ({ src, fileName, format = 'png' }) => {
+    const image = await loadImageElement(src)
+    const canvas = document.createElement('canvas')
+    canvas.width = image.width
+    canvas.height = image.height
+
+    const ctx = canvas.getContext('2d', { alpha: false })
+    if (!ctx) {
+        throw new Error('Unable to prepare download canvas')
+    }
+
+    ctx.imageSmoothingEnabled = true
+    ctx.imageSmoothingQuality = 'high'
+    ctx.drawImage(image, 0, 0, image.width, image.height)
+
+    const mimeType = format === 'jpg' ? 'image/jpeg' : 'image/png'
+    const quality = format === 'jpg' ? 0.95 : 1
+
+    const blob = await new Promise((resolve, reject) => {
+        try {
+            canvas.toBlob((result) => {
+                if (result) {
+                    resolve(result)
+                } else {
+                    reject(new Error('Failed to prepare image download'))
+                }
+            }, mimeType, quality)
+        } catch (blobErr) {
+            reject(blobErr)
+        }
+    })
+
+    downloadBlob(blob, fileName)
+}
+
 const PublicEventDP = () => {
     const { slug, projectSlug, accessKey } = useParams()
     const [loading, setLoading] = useState(true)
@@ -253,8 +387,12 @@ const PublicEventDP = () => {
     const [submitting, setSubmitting] = useState(false)
     const [submitSuccess, setSubmitSuccess] = useState(false)
     const [guestPhotoSrc, setGuestPhotoSrc] = useState('')
+    const [guestPhotoAdjustments, setGuestPhotoAdjustments] = useState(null)
     const [guestTextByZone, setGuestTextByZone] = useState({})
     const [guestViewMode, setGuestViewMode] = useState('edit')
+    const [finalImage, setFinalImage] = useState(null)
+    const [isFinalizing, setIsFinalizing] = useState(false)
+    const [finalizeError, setFinalizeError] = useState('')
     const [downloadError, setDownloadError] = useState('')
     const [isDownloading, setIsDownloading] = useState(false)
     const [downloadCount, setDownloadCount] = useState(0)
@@ -276,6 +414,7 @@ const PublicEventDP = () => {
                 const response = await getPublicEventDP({ slug, projectSlug, accessKey })
                 setEventDP(response.eventDP || null)
                 setDownloadCount(Number(response.eventDP?.metrics?.downloadCount || 0))
+                setFinalImage(response.eventDP?.publish?.finalImage || null)
             } catch (error) {
                 console.error('Failed to load public EventDP:', error)
                 const status = error.response?.status
@@ -308,8 +447,10 @@ const PublicEventDP = () => {
 
             const parsed = JSON.parse(raw)
             setGuestPhotoSrc(typeof parsed.photoSrc === 'string' ? parsed.photoSrc : '')
+            setGuestPhotoAdjustments(parsed.photoAdjustments && typeof parsed.photoAdjustments === 'object' ? parsed.photoAdjustments : null)
             setGuestTextByZone(parsed.textByZone && typeof parsed.textByZone === 'object' ? parsed.textByZone : {})
             setGuestViewMode(parsed.viewMode === 'preview' ? 'preview' : 'edit')
+            setFinalImage(parsed.finalImage && typeof parsed.finalImage === 'object' ? parsed.finalImage : null)
         } catch (err) {
             console.warn('Failed to restore guest draft from local storage', err)
         }
@@ -323,14 +464,16 @@ const PublicEventDP = () => {
         try {
             localStorage.setItem(guestDraftStorageKey, JSON.stringify({
                 photoSrc: guestPhotoSrc,
+                photoAdjustments: guestPhotoAdjustments,
                 textByZone: guestTextByZone,
                 viewMode: guestViewMode,
+                finalImage,
                 savedAt: new Date().toISOString(),
             }))
         } catch (err) {
             console.warn('Failed to persist guest draft locally', err)
         }
-    }, [eventDP, guestDraftStorageKey, guestPhotoSrc, guestTextByZone, guestViewMode])
+    }, [eventDP, guestDraftStorageKey, guestPhotoAdjustments, guestPhotoSrc, guestTextByZone, guestViewMode, finalImage])
 
     useEffect(() => {
         const editor = eventDP?.editor
@@ -368,11 +511,20 @@ const PublicEventDP = () => {
         })
     }, [eventDP])
 
-    const handlePhotoSubmit = async (file, onSuccess) => {
+    const handlePhotoSubmit = async (submission, onSuccess) => {
         try {
             setSubmitting(true)
+            const file = submission?.file
+            if (!file) {
+                throw new Error('Missing guest photo file')
+            }
+
             const imageDataUrl = await readFileAsDataUrl(file)
             setGuestPhotoSrc(imageDataUrl)
+            setGuestPhotoAdjustments(submission?.adjustments || null)
+            setFinalImage(null)
+            setFinalizeError('')
+            setDownloadError('')
             setSubmitSuccess(true)
             onSuccess?.()
             setTimeout(() => {
@@ -393,6 +545,9 @@ const PublicEventDP = () => {
                 ...prev,
                 [String(zoneIndex)]: text,
             }))
+            setFinalImage(null)
+            setFinalizeError('')
+            setDownloadError('')
             setSubmitSuccess(true)
             onSuccess?.()
             setTimeout(() => {
@@ -468,7 +623,8 @@ const PublicEventDP = () => {
     const canSubmit = hasPhotoZone || hasTextZones
 
     const hasGuestTextSubmission = Object.values(guestTextByZone).some((value) => Boolean(String(value || '').trim()))
-    const canDownload = Boolean(eventDP.asset?.secureUrl && (guestPhotoSrc || hasGuestTextSubmission))
+    const canFinalize = Boolean(eventDP.asset?.secureUrl && (guestPhotoSrc || hasGuestTextSubmission))
+    const canDownload = Boolean(finalImage?.secureUrl)
     const activeTextIndex = selectedZoneIndex?.startsWith('text-')
         ? Number(selectedZoneIndex.split('-')[1])
         : null
@@ -497,8 +653,79 @@ const PublicEventDP = () => {
         window.open(shareUrl, '_blank', 'noopener,noreferrer')
     }
 
-    const handleDownload = async (format = 'png') => {
+    const handleFinalize = async () => {
         if (!eventDP?.asset?.secureUrl) {
+            setFinalizeError('Base image not available.')
+            return
+        }
+
+        if (!guestPhotoSrc && !Object.values(guestTextByZone).some((value) => Boolean(String(value || '').trim()))) {
+            setFinalizeError('Add a photo or text before finalizing.')
+            return
+        }
+
+        setIsFinalizing(true)
+        setFinalizeError('')
+        setDownloadError('')
+
+        try {
+            const { blob, mimeType, extension } = await buildFinalCompositeBlob({
+                eventDP,
+                guestPhotoSrc,
+                guestPhotoAdjustments,
+                guestTextByZone,
+                format: 'png',
+            })
+
+            const fileName = `${(eventDP.title || 'eventdp').replace(/\s+/g, '-').toLowerCase()}-final.${extension}`
+            const outputFile = new File([blob], fileName, {
+                type: mimeType,
+                lastModified: Date.now(),
+            })
+
+            const signatureData = await requestPublicFinalUploadSignature({
+                slug,
+                projectSlug,
+                accessKey,
+            })
+
+            const uploadedAsset = await uploadToCloudinary({
+                signatureData,
+                file: outputFile,
+            })
+
+            setFinalImage(uploadedAsset)
+
+            try {
+                const saveResponse = await savePublicFinalImage({
+                    slug,
+                    projectSlug,
+                    accessKey,
+                    finalImage: uploadedAsset,
+                })
+
+                const nextFinalImage = saveResponse?.publish?.finalImage || {
+                    ...uploadedAsset,
+                    uploadedAt: new Date().toISOString(),
+                }
+
+                setFinalImage(nextFinalImage)
+            } catch (saveErr) {
+                console.warn('Uploaded final image but could not sync metadata to backend:', saveErr)
+                setFinalizeError('Completed image saved to Cloudinary, but backend sync failed.')
+            }
+            setGuestViewMode('preview')
+        } catch (err) {
+            console.error('Failed to finalize EventDP:', err)
+            setFinalizeError(err?.response?.data?.message || err?.message || 'Could not save the completed image.')
+        } finally {
+            setIsFinalizing(false)
+        }
+    }
+
+    const handleDownload = async (format = 'png') => {
+        if (!finalImage?.secureUrl) {
+            setDownloadError('Finalize the EventDP first.')
             return
         }
 
@@ -506,101 +733,39 @@ const PublicEventDP = () => {
         setDownloadError('')
 
         try {
-            const baseImage = await loadImageElement(eventDP.asset.secureUrl)
-            const photoImage = guestPhotoSrc ? await loadImageElement(guestPhotoSrc) : null
-            const baseWidth = Number(eventDP.asset?.width) || 1080
-            const baseHeight = Number(eventDP.asset?.height) || 1920
-
-            // Scale factor for higher quality (2x = 2160x3840 before downsampling)
-            const scaleFactor = 2
-            const width = baseWidth * scaleFactor
-            const height = baseHeight * scaleFactor
-
-            const canvas = document.createElement('canvas')
-            canvas.width = width
-            canvas.height = height
-            const ctx = canvas.getContext('2d', { alpha: false })
-
-            if (!ctx) {
-                throw new Error('Unable to prepare canvas context')
-            }
-
-            // Enable high-quality image rendering
-            ctx.imageSmoothingEnabled = true
-            ctx.imageSmoothingQuality = 'high'
-
-            ctx.clearRect(0, 0, width, height)
-            ctx.drawImage(baseImage, 0, 0, width, height)
-
-            const photoZone = getZoneActual(eventDP.editor?.committedZone)
-            if (photoImage && photoZone) {
-                const scaledZone = {
-                    x: Number(photoZone.x) * scaleFactor,
-                    y: Number(photoZone.y) * scaleFactor,
-                    width: Number(photoZone.width) * scaleFactor,
-                    height: Number(photoZone.height) * scaleFactor,
-                }
-                drawImageIntoZone(ctx, photoImage, scaledZone, eventDP.editor?.zoneShape)
-            }
-
-            const textZones = Array.isArray(eventDP.editor?.textZones) ? eventDP.editor.textZones : []
-            textZones.forEach((zone, index) => {
-                const submittedText = guestTextByZone[String(index)]
-                if (!submittedText || !String(submittedText).trim()) {
-                    return
-                }
-
-                const zoneActual = getZoneActual(zone)
-                const scaledZone = {
-                    x: Number(zoneActual.x) * scaleFactor,
-                    y: Number(zoneActual.y) * scaleFactor,
-                    width: Number(zoneActual.width) * scaleFactor,
-                    height: Number(zoneActual.height) * scaleFactor,
-                }
-                drawTextIntoZone(ctx, submittedText, scaledZone, eventDP.editor?.guestTextStyle || {})
-            })
-
-            const mimeType = format === 'jpg' ? 'image/jpeg' : 'image/png'
             const extension = format === 'jpg' ? 'jpg' : 'png'
+            const safeTitle = (eventDP.title || 'eventdp').replace(/\s+/g, '-').toLowerCase()
+            const fileName = `${safeTitle}-guest.${extension}`
 
-            // Use higher quality for JPEG, or PNG for lossless
-            const quality = format === 'jpg' ? 0.95 : 1.0
-            const blob = await new Promise((resolve) => {
-                canvas.toBlob(resolve, mimeType, quality)
+            await downloadImageFromUrl({
+                src: finalImage.secureUrl,
+                fileName,
+                format,
             })
 
-            if (!blob) {
-                throw new Error('Failed to build download image')
-            }
-
-            const objectUrl = URL.createObjectURL(blob)
-            const anchor = document.createElement('a')
-            anchor.href = objectUrl
-            anchor.download = `${(eventDP.title || 'eventdp').replace(/\s+/g, '-').toLowerCase()}-guest.${extension}`
-            document.body.appendChild(anchor)
-            anchor.click()
-            anchor.remove()
-            URL.revokeObjectURL(objectUrl)
-
-            const metricResult = await recordPublicDownload({ slug, projectSlug, accessKey })
-            if (Number.isFinite(metricResult?.downloadCount)) {
-                setDownloadCount(Number(metricResult.downloadCount))
-            } else {
-                setDownloadCount((prev) => prev + 1)
+            try {
+                const metricResult = await recordPublicDownload({ slug, projectSlug, accessKey })
+                if (Number.isFinite(metricResult?.downloadCount)) {
+                    setDownloadCount(Number(metricResult.downloadCount))
+                } else {
+                    setDownloadCount((prev) => prev + 1)
+                }
+            } catch (metricErr) {
+                console.warn('Failed to record download metric:', metricErr)
             }
         } catch (err) {
-            console.error('Failed to download composed EventDP:', err)
-            setDownloadError('Could not generate your download image. Please try again.')
+            console.error('Failed to download final EventDP:', err)
+            setDownloadError(err?.message || 'Could not download the completed image.')
         } finally {
             setIsDownloading(false)
         }
     }
 
     return (
-        <main className='min-h-screen bg-pale-sage flex flex-col'>
+        <main className='relative min-h-screen bg-pale-sage flex flex-col lg:h-screen lg:overflow-hidden'>
             {/* Header */}
-            <header className='border-b border-dusty-green/20 bg-white/70 backdrop-blur-sm shadow-sm'>
-                <div className='max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4'>
+            <header className='shrink-0 border-b border-dusty-green/20 bg-white/70 backdrop-blur-sm shadow-sm'>
+                <div className='max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-5'>
                     <div className='space-y-2'>
                         <p className='text-[11px] uppercase tracking-[0.15em] font-bold text-forest-green'>
                             Shared EventDP
@@ -632,9 +797,9 @@ const PublicEventDP = () => {
             </header>
 
             {/* Main Canvas Area */}
-            <div className='flex-1 flex flex-col lg:flex-row overflow-hidden'>
+            <div className='flex-1 flex flex-col lg:flex-row overflow-visible lg:overflow-hidden'>
                 {/* Canvas Section (70%) */}
-                <div className='flex-1 flex flex-col overflow-hidden'>
+                <div className='flex-none lg:flex-1 min-h-[62svh] lg:min-h-0 flex flex-col overflow-hidden'>
                     {eventDP.asset?.secureUrl ? (
                         <GuestCanvasDisplay
                             eventDP={eventDP}
@@ -658,8 +823,8 @@ const PublicEventDP = () => {
                 </div>
 
                 {/* Info Sidebar (30%) */}
-                <div className='w-full lg:w-96 border-t lg:border-t-0 lg:border-l border-dusty-green/20 bg-white/60 backdrop-blur-sm overflow-y-auto'>
-                    <div className='p-6 space-y-6'>
+                <div className='w-full lg:w-96 border-t lg:border-t-0 lg:border-l border-dusty-green/20 bg-white/60 backdrop-blur-sm overflow-visible lg:overflow-y-auto'>
+                    <div className='p-4 sm:p-6 space-y-5 sm:space-y-6'>
                         {/* Instructions */}
                         <div className='space-y-3'>
                             <h2 className='font-bold text-dark-slate text-sm uppercase tracking-wide'>
@@ -759,56 +924,83 @@ const PublicEventDP = () => {
 
                         <div className='space-y-2'>
                             <h3 className='font-bold text-dark-slate text-sm uppercase tracking-wide'>
-                                Download & Share
+                                Finalize & Download
                             </h3>
-                            <div className='grid grid-cols-2 gap-2'>
-                                <button
-                                    type='button'
-                                    onClick={() => handleDownload('png')}
-                                    disabled={!canDownload || isDownloading}
-                                    className='h-10 rounded-lg bg-forest-green text-white text-xs font-bold uppercase tracking-wide disabled:opacity-50 disabled:cursor-not-allowed'
-                                >
-                                    {isDownloading ? 'Preparing...' : 'Download PNG'}
-                                </button>
-                                <button
-                                    type='button'
-                                    onClick={() => handleDownload('jpg')}
-                                    disabled={!canDownload || isDownloading}
-                                    className='h-10 rounded-lg border border-forest-green text-forest-green text-xs font-bold uppercase tracking-wide disabled:opacity-50 disabled:cursor-not-allowed'
-                                >
-                                    Download JPG
-                                </button>
-                            </div>
-                            {!canDownload && (
-                                <p className='text-[11px] text-dark-slate/60'>
-                                    Add a photo or text first to enable download.
-                                </p>
-                            )}
-                            <p className='text-[11px] text-dark-slate/60'>
-                                Total downloads: {downloadCount}
-                            </p>
-                            {downloadError && (
-                                <p className='text-xs text-red-600'>{downloadError}</p>
-                            )}
-                            <div className='grid grid-cols-5 gap-1.5'>
-                                {[
-                                    { id: 'whatsapp', icon: 'mdi:whatsapp' },
-                                    { id: 'facebook', icon: 'mdi:facebook' },
-                                    { id: 'x', icon: 'mdi:twitter' },
-                                    { id: 'linkedin', icon: 'mdi:linkedin' },
-                                    { id: 'telegram', icon: 'mdi:telegram' },
-                                ].map((social) => (
+
+                            {!finalImage?.secureUrl ? (
+                                <>
                                     <button
-                                        key={social.id}
                                         type='button'
-                                        onClick={() => openShareIntent(social.id)}
-                                        className='h-9 rounded-lg border border-dusty-green/30 bg-white text-dark-slate hover:bg-pale-sage/30 flex items-center justify-center'
-                                        aria-label={`Share on ${social.id}`}
+                                        onClick={handleFinalize}
+                                        disabled={!canFinalize || isFinalizing}
+                                        className='h-11 w-full rounded-lg bg-forest-green text-white text-xs font-bold uppercase tracking-wide disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2'
                                     >
-                                        <Icon icon={social.icon} width='16' height='16' />
+                                        {isFinalizing ? (
+                                            <>
+                                                <Icon icon='mdi:loading' width='16' height='16' className='animate-spin' />
+                                                Saving...
+                                            </>
+                                        ) : (
+                                            'Done'
+                                        )}
                                     </button>
-                                ))}
-                            </div>
+                                    <p className='text-[11px] text-dark-slate/60'>
+                                        Finish editing to save the completed HD EventDP to Cloudinary.
+                                    </p>
+                                    {finalizeError && (
+                                        <p className='text-xs text-red-600'>{finalizeError}</p>
+                                    )}
+                                </>
+                            ) : (
+                                <>
+                                    <div className='grid grid-cols-1 sm:grid-cols-2 gap-2'>
+                                        <button
+                                            type='button'
+                                            onClick={() => handleDownload('png')}
+                                            disabled={isDownloading}
+                                            className='h-10 rounded-lg bg-forest-green text-white text-xs font-bold uppercase tracking-wide disabled:opacity-50 disabled:cursor-not-allowed'
+                                        >
+                                            {isDownloading ? 'Preparing...' : 'Download PNG'}
+                                        </button>
+                                        <button
+                                            type='button'
+                                            onClick={() => handleDownload('jpg')}
+                                            disabled={isDownloading}
+                                            className='h-10 rounded-lg border border-forest-green text-forest-green text-xs font-bold uppercase tracking-wide disabled:opacity-50 disabled:cursor-not-allowed'
+                                        >
+                                            Download JPG
+                                        </button>
+                                    </div>
+                                    <p className='text-[11px] text-dark-slate/60'>
+                                        Final image saved to Cloudinary and ready for download.
+                                    </p>
+                                    <p className='text-[11px] text-dark-slate/60'>
+                                        Total downloads: {downloadCount}
+                                    </p>
+                                    {downloadError && (
+                                        <p className='text-xs text-red-600'>{downloadError}</p>
+                                    )}
+                                    <div className='grid grid-cols-5 gap-1.5 sm:gap-2'>
+                                        {[
+                                            { id: 'whatsapp', icon: 'mdi:whatsapp' },
+                                            { id: 'facebook', icon: 'mdi:facebook' },
+                                            { id: 'x', icon: 'mdi:twitter' },
+                                            { id: 'linkedin', icon: 'mdi:linkedin' },
+                                            { id: 'telegram', icon: 'mdi:telegram' },
+                                        ].map((social) => (
+                                            <button
+                                                key={social.id}
+                                                type='button'
+                                                onClick={() => openShareIntent(social.id)}
+                                                className='h-9 rounded-lg border border-dusty-green/30 bg-white text-dark-slate hover:bg-pale-sage/30 flex items-center justify-center'
+                                                aria-label={`Share on ${social.id}`}
+                                            >
+                                                <Icon icon={social.icon} width='16' height='16' />
+                                            </button>
+                                        ))}
+                                    </div>
+                                </>
+                            )}
                         </div>
 
                         {/* No Zones Available */}

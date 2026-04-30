@@ -55,7 +55,7 @@ const toNormalised = (actual, asset) => {
     }
 }
 
-const normalizeZone = (zone, asset) => {
+const normalizeZone = (zone, asset, fallbackStyle = null) => {
     if (!zone || typeof zone !== 'object') {
         return null
     }
@@ -63,6 +63,9 @@ const normalizeZone = (zone, asset) => {
     const display = asRect(zone.display)
     const actual = asRect(zone.actual) || fromNormalised(zone.normalised, asset) || display
     const normalised = actual ? toNormalised(actual, asset) : null
+    const style = zone.style && typeof zone.style === 'object'
+        ? { ...zone.style }
+        : (fallbackStyle && typeof fallbackStyle === 'object' ? { ...fallbackStyle } : {})
 
     if (!display && !actual) {
         return null
@@ -72,6 +75,7 @@ const normalizeZone = (zone, asset) => {
         display: display || actual,
         actual: actual || display,
         normalised: normalised,
+        style,
     }
 }
 
@@ -86,8 +90,12 @@ const normalizeEditor = (editor, asset) => {
     }
 
     if (Array.isArray(editor.textZones)) {
+        const fallbackStyle = editor.guestTextStyle && typeof editor.guestTextStyle === 'object'
+            ? editor.guestTextStyle
+            : null
+
         nextEditor.textZones = editor.textZones
-            .map((zone) => normalizeZone(zone, asset))
+            .map((zone) => normalizeZone(zone, asset, fallbackStyle))
             .filter(Boolean)
     }
 

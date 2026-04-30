@@ -13,7 +13,6 @@ const GuestSubmissionForm = ({
     isLoading,
     initialText,
 }) => {
-    const CROP_VIEW_SIZE = 280
     const [photoFile, setPhotoFile] = useState(null)
     const [photoPreview, setPhotoPreview] = useState(null)
     const [photoMeta, setPhotoMeta] = useState({ width: 0, height: 0 })
@@ -88,50 +87,6 @@ const GuestSubmissionForm = ({
         reader.readAsDataURL(file)
     }
 
-    const buildCroppedPhotoFile = async () => {
-        if (!photoPreview || !photoFile) {
-            return null
-        }
-
-        const image = await loadImageElement(photoPreview)
-        const canvas = document.createElement('canvas')
-        canvas.width = CROP_VIEW_SIZE
-        canvas.height = CROP_VIEW_SIZE
-
-        const ctx = canvas.getContext('2d')
-        if (!ctx) {
-            return null
-        }
-
-        const baseScale = Math.max(CROP_VIEW_SIZE / image.width, CROP_VIEW_SIZE / image.height)
-        const totalScale = baseScale * photoZoom
-        const drawWidth = image.width * totalScale
-        const drawHeight = image.height * totalScale
-        const rotationInRadians = (photoRotation * Math.PI) / 180
-
-        ctx.clearRect(0, 0, CROP_VIEW_SIZE, CROP_VIEW_SIZE)
-        ctx.translate((CROP_VIEW_SIZE / 2) + photoOffsetX, (CROP_VIEW_SIZE / 2) + photoOffsetY)
-        ctx.rotate(rotationInRadians)
-        ctx.drawImage(image, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight)
-
-        const blob = await new Promise((resolve) => {
-            canvas.toBlob(resolve, photoFile.type || 'image/jpeg', 0.92)
-        })
-
-        if (!blob) {
-            return null
-        }
-
-        const originalExt = photoFile.name.includes('.')
-            ? photoFile.name.split('.').pop()
-            : 'jpg'
-
-        return new File([blob], `cropped-${Date.now()}.${originalExt}`, {
-            type: blob.type || photoFile.type || 'image/jpeg',
-            lastModified: Date.now(),
-        })
-    }
-
     const handlePhotoSubmit = async () => {
         if (!photoFile) {
             setFormError('Please select a photo')
@@ -141,10 +96,16 @@ const GuestSubmissionForm = ({
         setProcessingPhoto(true)
 
         try {
-            const editedPhoto = await buildCroppedPhotoFile()
-            const submissionFile = editedPhoto || photoFile
-
-            onPhotoSubmit?.(submissionFile, () => {
+            onPhotoSubmit?.({
+                file: photoFile,
+                adjustments: {
+                    zoom: photoZoom,
+                    offsetX: photoOffsetX,
+                    offsetY: photoOffsetY,
+                    rotation: photoRotation,
+                },
+                meta: photoMeta,
+            }, () => {
                 setPhotoFile(null)
                 setPhotoPreview(null)
                 setPhotoMeta({ width: 0, height: 0 })
@@ -188,9 +149,9 @@ const GuestSubmissionForm = ({
     }
 
     return (
-        <div className='absolute inset-0 flex items-end justify-center p-4 pointer-events-none'>
+        <div className='fixed inset-0 flex items-end justify-center p-3 sm:p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pointer-events-none z-100'>
             {/* Submission Panel */}
-            <div className='bg-white rounded-t-2xl shadow-2xl border border-dusty-green/20 w-full max-w-md pointer-events-auto overflow-hidden animate-slide-up'>
+            <div className='bg-white rounded-t-2xl shadow-2xl border border-dusty-green/20 w-full max-w-md max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-2rem)] pointer-events-auto overflow-hidden flex flex-col animate-slide-up'>
                 {/* Header */}
                 <div className='flex items-center justify-between p-4 border-b border-dusty-green/10'>
                     <div>
@@ -211,7 +172,7 @@ const GuestSubmissionForm = ({
                 </div>
 
                 {/* Content */}
-                <div className='p-4 space-y-3'>
+                <div className='flex-1 overflow-y-auto p-4 space-y-3'>
                     {/* Photo Zone Form */}
                     {isPhotoZone && (
                         <>
@@ -243,7 +204,7 @@ const GuestSubmissionForm = ({
                                         </button>
                                     </div>
 
-                                    <div className='grid grid-cols-2 gap-2 text-[11px] text-dark-slate/70'>
+                                    <div className='grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-dark-slate/70'>
                                         <label className='space-y-1'>
                                             <span>Zoom</span>
                                             <input
@@ -330,7 +291,7 @@ const GuestSubmissionForm = ({
                             }}
                             placeholder='Write your message here...'
                             maxLength={500}
-                            className='w-full h-24 p-3 rounded-lg border border-dusty-green/20 focus:border-forest-green focus:ring-2 focus:ring-forest-green/20 outline-none resize-none text-sm text-dark-slate placeholder:text-dark-slate/40'
+                            className='w-full h-28 sm:h-24 p-3 rounded-lg border border-dusty-green/20 focus:border-forest-green focus:ring-2 focus:ring-forest-green/20 outline-none resize-none text-sm text-dark-slate placeholder:text-dark-slate/40'
                             disabled={isLoading}
                         />
                     )}
@@ -352,7 +313,7 @@ const GuestSubmissionForm = ({
                 </div>
 
                 {/* Footer Actions */}
-                <div className='flex gap-2 p-4 border-t border-dusty-green/10 bg-pale-sage/30'>
+                <div className='flex flex-col sm:flex-row gap-2 p-4 border-t border-dusty-green/10 bg-pale-sage/30'>
                     <button
                         onClick={onClose}
                         className='flex-1 px-4 py-2 rounded-lg border border-dusty-green/20 text-dark-slate font-medium text-sm hover:bg-white/50 transition-colors'
