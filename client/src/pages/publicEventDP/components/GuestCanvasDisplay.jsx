@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { Icon } from '@iconify/react'
-import { fitCanvasToViewport } from '../../create_EventDP/logic/canvasMath'
 import { fitTextLayoutInZone, getTextMeasurementContext, lengthToPx } from '../../create_EventDP/logic/textLayout'
 import { resolveZoneActual, actualToGuestDisplay } from '../../create_EventDP/logic/zoneCoordinates'
 
@@ -143,16 +142,8 @@ const GuestCanvasDisplay = ({
         width: Number(eventDP.asset?.width) || 1080,
         height: Number(eventDP.asset?.height) || 1920,
     }
-    const hostReference = fitCanvasToViewport({
-        canvasWidth: imageDimensions.width,
-        canvasHeight: imageDimensions.height,
-        viewportWidth: 340,
-        viewportHeight: 610,
-        zoom: 1,
-    })
     const canvasDimensions = `${imageDimensions.width} × ${imageDimensions.height}px`
 
-    // Match host default framing (340x610 viewport at 100% zoom), then shrink responsively on small screens.
     useEffect(() => {
         const calculateCanvasSize = () => {
             if (!containerRef.current) return
@@ -160,10 +151,16 @@ const GuestCanvasDisplay = ({
             const { width: containerWidth, height: containerHeight } = containerRef.current.getBoundingClientRect()
             const safeWidth = Math.max(120, containerWidth - 24)
             const safeHeight = Math.max(180, containerHeight - 24)
-            const scale = Math.min(safeWidth / hostReference.width, safeHeight / hostReference.height, 1)
+            const isCompactViewport = containerWidth < 768
+            const scale = isCompactViewport
+                ? safeWidth / imageDimensions.width
+                : Math.min(
+                    safeWidth / imageDimensions.width,
+                    safeHeight / imageDimensions.height,
+                )
 
-            const displayWidth = hostReference.width * scale
-            const displayHeight = hostReference.height * scale
+            const displayWidth = imageDimensions.width * scale
+            const displayHeight = imageDimensions.height * scale
 
             setCanvasSize({
                 width: Math.round(displayWidth),
@@ -187,7 +184,7 @@ const GuestCanvasDisplay = ({
             window.removeEventListener('resize', calculateCanvasSize)
             resizeObserver?.disconnect()
         }
-    }, [hostReference.width, hostReference.height])
+    }, [imageDimensions.width, imageDimensions.height])
 
     // Convert actual image coordinates to display coordinates based on current canvas size
     const getDisplayCoords = (actualCoords) => {
@@ -226,7 +223,7 @@ const GuestCanvasDisplay = ({
             {/* Canvas Container */}
             <div
                 ref={containerRef}
-                className='flex-1 relative overflow-auto flex items-center justify-center p-3 sm:p-4 lg:p-8 bg-[radial-gradient(rgba(144,171,139,0.2)_0.8px,transparent_0.8px)] bg-size-[20px_20px]'
+                className='flex-1 relative overflow-auto flex items-start justify-center p-2 sm:p-4 lg:p-8 bg-[radial-gradient(rgba(144,171,139,0.2)_0.8px,transparent_0.8px)] bg-size-[20px_20px] lg:items-center'
             >
                 {/* Canvas Frame - Using exact pixel dimensions */}
                 {canvasSize.width > 0 && (
