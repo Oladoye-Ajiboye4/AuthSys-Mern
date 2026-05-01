@@ -803,6 +803,7 @@ const PublicEventDP = () => {
                     {eventDP.asset?.secureUrl ? (
                         <GuestCanvasDisplay
                             eventDP={eventDP}
+                            cornerRadius={eventDP.editor?.cornerRadius}
                             selectedZoneIndex={selectedZoneIndex}
                             onPhotoZoneClick={() => guestViewMode === 'edit' && setSelectedZoneIndex('photo')}
                             onTextZoneClick={(idx) => guestViewMode === 'edit' && setSelectedZoneIndex(`text-${idx}`)}

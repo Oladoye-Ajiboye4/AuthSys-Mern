@@ -123,6 +123,7 @@ const ZoneDisplayOverlay = ({
  */
 const GuestCanvasDisplay = ({
     eventDP,
+    cornerRadius,
     selectedZoneIndex,
     onPhotoZoneClick,
     onTextZoneClick,
@@ -252,7 +253,9 @@ const GuestCanvasDisplay = ({
                                     top: photoZoneDisplay.y,
                                     width: photoZoneDisplay.width,
                                     height: photoZoneDisplay.height,
-                                    borderRadius: zoneShape === 'circle' ? '999px' : '8px',
+                                    borderRadius: zoneShape === 'circle'
+                                        ? '999px'
+                                        : `${Number.isFinite(Number(cornerRadius)) ? Number(cornerRadius) : 0}px`,
                                     zIndex: 10,
                                 }}
                             >
