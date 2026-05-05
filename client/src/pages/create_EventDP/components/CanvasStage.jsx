@@ -1,6 +1,7 @@
 import React, { useRef } from 'react'
 import { Icon } from '@iconify/react'
 import useZoneSelector from '../logic/useZoneSelector'
+import { resolveZoneDisplay } from '../logic/zoneCoordinates'
 
 const lengthToPx = (value, unit = 'px') => {
     const parsed = Number.parseFloat(value)
@@ -54,10 +55,10 @@ const ZoneOverlay = ({
 
     const borderColor = kind === 'text'
         ? (isInteracting ? 'rgba(70,85,119,0.9)' : '#465577')
-        : (isInteracting ? 'rgba(90,120,99,0.8)' : '#5A7863')
+        : (isInteracting ? 'rgba(90,120,99,0.9)' : '#5A7863')
     const fillColor = kind === 'text'
         ? (isInteracting ? 'rgba(70,85,119,0.20)' : 'rgba(70,85,119,0.13)')
-        : (isInteracting ? 'rgba(90,120,99,0.17)' : 'rgba(90,120,99,0.13)')
+        : (isInteracting ? 'rgba(90,120,99,0.13)' : 'rgba(90,120,99,0.1)')
 
     const style = {
         position: 'absolute',
@@ -65,7 +66,7 @@ const ZoneOverlay = ({
         top: rect.y,
         width: rect.width,
         height: rect.height,
-        border: `2px dashed ${borderColor}`,
+        border: `.5px solid ${borderColor}`,
         backgroundColor: fillColor,
         pointerEvents: interactive ? 'auto' : 'none',
         transition: isInteracting ? 'none' : 'all 0.2s ease',
@@ -162,7 +163,7 @@ const ZoneOverlay = ({
                 <span
                     key={handle.key}
                     data-resize-handle={handle.key}
-                    className={`absolute h-3 w-3 rounded-full bg-white border shadow ${kind === 'text' ? 'border-[#465577]' : 'border-forest-green'} ${handle.className}`}
+                    className={`absolute h-4 w-4 rounded-full bg-white border shadow ${kind === 'text' ? 'border-[#465577]' : 'border-forest-green'} ${handle.className}`}
                 />
             ))}
         </div>
@@ -193,6 +194,9 @@ const CanvasStage = ({
     guestTextStyle,
     showMobileToolSwitch = false,
     disabled,
+    projectCreationBlocked = false,
+    onRequestStorageInfo,
+    projectSlotLimit = 5,
 }) => {
     const fileInputRef = useRef(null)
 
@@ -213,16 +217,20 @@ const CanvasStage = ({
     }
 
     const canDraw = !!uploadedImage && !previewMode && !disabled && (activeCanvasTool === 'photo' || allowGuestText)
-    const photoRect = isTextTool ? committedZone?.display || null : activeRect
+    const photoRect = isTextTool
+        ? resolveZoneDisplay(committedZone, canvasDimensions, displayedCanvasSize)
+        : activeRect
 
     const renderedTextZones = allowGuestText
         ? textZones.map((zone, index) => {
-            if (!zone?.display) {
+            if (!zone) {
                 return { key: `text-zone-${index}`, rect: null, selected: false, style: guestTextStyle }
             }
 
             const isSelected = index === activeTextZoneIndex
-            const rect = (isTextTool && isSelected && activeRect) ? activeRect : zone.display
+            const rect = (isTextTool && isSelected && activeRect)
+                ? activeRect
+                : resolveZoneDisplay(zone, canvasDimensions, displayedCanvasSize)
             return {
                 key: `text-zone-${index}`,
                 rect,
@@ -235,7 +243,7 @@ const CanvasStage = ({
     return (
         <div className='flex-1 relative overflow-hidden'>
             {/* Dotted workspace background */}
-            <div className='absolute inset-0 bg-[radial-gradient(rgba(144,171,139,0.35)_0.8px,transparent_0.8px)] bg-size-[20px_20px]' />
+            <div className='absolute inset-0 bg-[radial-gradient(rgba(144,171,139,0.35)_1.2px,transparent_0.8px)] bg-size-[20px_20px]' />
 
             <div className='relative h-full w-full flex items-center justify-center p-3 pt-16 sm:p-10 lg:p-16'>
                 {/* Canvas frame */}
@@ -263,18 +271,45 @@ const CanvasStage = ({
                                 style={{ opacity: backgroundOpacity / 100 }}
                             />
                             {!previewMode && (
-                                <div className={`absolute inset-0 pointer-events-none mix-blend-multiply transition-colors ${isInteracting ? 'bg-black/65' : 'bg-black/25'}`} />
+                                <div className={`absolute inset-0 pointer-events-none mix-blend-multiply transition-colors ${isInteracting ? 'bg-black/80' : 'bg-black/65'}`} />
                             )}
                         </>
                     ) : (
-                        <button
-                            type='button'
-                            onClick={() => fileInputRef.current?.click()}
-                            className='h-full w-full flex flex-col items-center justify-center text-forest-green/50 hover:text-forest-green hover:bg-pale-sage/40 transition-colors'
-                        >
-                            <Icon icon='mdi:upload-outline' width='66' height='66' />
-                            <span className='mt-3 text-sm font-semibold'>Upload your image</span>
-                        </button>
+                        projectCreationBlocked ? (
+                            <div className='h-full w-full flex flex-col items-center justify-center px-6 text-center bg-pale-sage/35'>
+                                <div className='h-16 w-16 rounded-full bg-dark-slate/10 flex items-center justify-center mb-4'>
+                                    <Icon icon='mdi:shield-alert-outline' width='34' height='34' className='text-dark-slate/70' />
+                                </div>
+                                <h3 className='text-lg font-bold text-dark-slate'>Project limit reached</h3>
+                                <p className='mt-2 text-sm text-dark-slate/70 max-w-sm'>
+                                    You have used all {projectSlotLimit} project slots. Delete an existing project on the dashboard to create a new one.
+                                </p>
+                                <div className='mt-4 flex flex-col sm:flex-row gap-2'>
+                                    <button
+                                        type='button'
+                                        onClick={onRequestStorageInfo}
+                                        className='h-10 px-4 rounded-xl bg-dark-slate text-white text-sm font-semibold'
+                                    >
+                                        View storage info
+                                    </button>
+                                    <a
+                                        href='/dashboard'
+                                        className='h-10 px-4 rounded-xl border border-dusty-green/35 text-dark-slate text-sm font-semibold inline-flex items-center justify-center'
+                                    >
+                                        Go to dashboard
+                                    </a>
+                                </div>
+                            </div>
+                        ) : (
+                            <button
+                                type='button'
+                                onClick={() => fileInputRef.current?.click()}
+                                className='h-full w-full flex flex-col items-center justify-center text-forest-green/50 hover:text-forest-green hover:bg-pale-sage/40 transition-colors'
+                            >
+                                <Icon icon='mdi:upload-outline' width='66' height='66' />
+                                <span className='mt-3 text-sm font-semibold'>Upload your image</span>
+                            </button>
+                        )
                     )}
 
                     {photoRect && (
@@ -317,7 +352,7 @@ const CanvasStage = ({
                             className='absolute top-2.5 right-2.5 sm:top-3 sm:right-3 h-10 w-10 sm:h-9 sm:w-9 rounded-full bg-dark-slate/80 text-white flex items-center justify-center hover:bg-dark-slate transition-colors'
                             aria-label='Remove image'
                         >
-                            <Icon icon='mdi:close' width='18' height='18' className='sm:w-[18px] sm:h-[18px]' />
+                            <Icon icon='mdi:close' width='18' height='18' className='sm:w-4.5 sm:h-4.5' />
                         </button>
                     )}
 

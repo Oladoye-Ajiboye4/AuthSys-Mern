@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react'
 import { Icon } from '@iconify/react'
 import { z } from 'zod'
-import { useSearchParams } from 'react-router'
+import { useNavigate, useSearchParams } from 'react-router'
 import TopNav from './components/TopNav'
 import StudioSidebar from './components/StudioSidebar'
 import CanvasToolbar from './components/CanvasToolbar'
@@ -13,6 +13,7 @@ import {
     autosaveDraft,
     createDraft,
     deleteDraft,
+    getDashboard,
     getFontCatalog,
     getDraft,
     publishDraft,
@@ -80,6 +81,7 @@ const serializeEditorSnapshot = (editor = {}) => JSON.stringify({
 })
 
 const CreateEventDP = () => {
+    const navigate = useNavigate()
     const [searchParams] = useSearchParams()
     const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
     const [desktopSidebarOpen, setDesktopSidebarOpen] = useState(true)
@@ -98,6 +100,9 @@ const CreateEventDP = () => {
     const [fontCatalogError, setFontCatalogError] = useState('')
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
     const [isDeleting, setIsDeleting] = useState(false)
+    const [storageStatus, setStorageStatus] = useState({ maxEvents: 5, usedEvents: 0, remainingEvents: 5 })
+    const [isStorageStatusLoading, setIsStorageStatusLoading] = useState(true)
+    const [showStorageLimitModal, setShowStorageLimitModal] = useState(false)
 
     const uploadKeyRef = useRef('')
     const autosaveTimerRef = useRef(null)
@@ -105,9 +110,13 @@ const CreateEventDP = () => {
     const lastSavedSnapshotRef = useRef('')
     const saveInFlightRef = useRef(false)
     const isHydratingDraftRef = useRef(false)
+    const storageLimitModalAutoOpenedRef = useRef(false)
     const [lastSavedTime, setLastSavedTime] = useState(null)
     const isEditorLocked = publishState === 'published' || publishState === 'publishing'
     const requestedDraftId = searchParams.get('draft') || searchParams.get('draftId') || ''
+    const hasEditableDraftContext = Boolean(draftMeta.draftId) || Boolean(requestedDraftId) || isLoadingDraft
+    const isStorageLimitReached = Number(storageStatus.maxEvents || 0) > 0 && Number(storageStatus.remainingEvents || 0) <= 0
+    const isProjectCreationBlocked = !hasEditableDraftContext && (isStorageStatusLoading || isStorageLimitReached)
 
     const normalizeTitle = useCallback((value) => value.trim().replace(/\s+/g, ' '), [])
 
@@ -262,6 +271,45 @@ const CreateEventDP = () => {
     }, [])
 
     useEffect(() => {
+        let isMounted = true
+
+        const fetchStorageStatus = async () => {
+            const token = localStorage.getItem('token')
+            if (!token) {
+                if (isMounted) {
+                    setIsStorageStatusLoading(false)
+                }
+                return
+            }
+
+            try {
+                const response = await getDashboard({ token })
+                if (!isMounted) {
+                    return
+                }
+
+                setStorageStatus(response?.storage || { maxEvents: 5, usedEvents: 0, remainingEvents: 5 })
+            } catch (error) {
+                if (!isMounted) {
+                    return
+                }
+
+                console.warn('Failed to load storage usage for create page:', error)
+            } finally {
+                if (isMounted) {
+                    setIsStorageStatusLoading(false)
+                }
+            }
+        }
+
+        fetchStorageStatus()
+
+        return () => {
+            isMounted = false
+        }
+    }, [])
+
+    useEffect(() => {
         const styleEntries = [guestTextStyle, ...textZoneStyles]
         const familyToWeightsMap = styleEntries.reduce((acc, style) => {
             const family = String(style?.fontFamily || '').trim()
@@ -296,6 +344,15 @@ const CreateEventDP = () => {
             updateGuestTextStyle({ fontWeight: variants[variants.length - 1] })
         }
     }, [fontVariantsByFamily, guestTextStyle?.fontFamily, guestTextStyle?.fontWeight, updateGuestTextStyle])
+
+    useEffect(() => {
+        if (isStorageStatusLoading || hasEditableDraftContext || !isStorageLimitReached || storageLimitModalAutoOpenedRef.current) {
+            return
+        }
+
+        storageLimitModalAutoOpenedRef.current = true
+        setShowStorageLimitModal(true)
+    }, [hasEditableDraftContext, isStorageLimitReached, isStorageStatusLoading])
 
     useEffect(() => {
         latestDraftMetaRef.current = draftMeta
@@ -589,6 +646,11 @@ const CreateEventDP = () => {
     }
 
     const handleGenerateLinkClick = () => {
+        if (isProjectCreationBlocked && !draftMeta.draftId) {
+            setShowStorageLimitModal(true)
+            return
+        }
+
         if (!draftMeta.draftId || !uploadedImage || isEditorLocked) {
             return
         }
@@ -602,6 +664,11 @@ const CreateEventDP = () => {
     }
 
     const handlePublish = async () => {
+        if (isProjectCreationBlocked && !draftMeta.draftId) {
+            setShowStorageLimitModal(true)
+            return
+        }
+
         if (!draftMeta.draftId || !uploadedImage) {
             return
         }
@@ -675,6 +742,28 @@ const CreateEventDP = () => {
             saveInFlightRef.current = false
         }
     }
+
+    const handleStorageLimitModalClose = () => {
+        setShowStorageLimitModal(false)
+    }
+
+    const handleGoToDashboard = () => {
+        setShowStorageLimitModal(false)
+        navigate('/dashboard')
+    }
+
+    const handleStorageLimitDetails = () => {
+        setShowStorageLimitModal(true)
+    }
+
+    const handleUploadImage = useCallback((file) => {
+        if (isProjectCreationBlocked && !draftMeta.draftId) {
+            setShowStorageLimitModal(true)
+            return
+        }
+
+        handleImageUpload(file)
+    }, [draftMeta.draftId, handleImageUpload, isProjectCreationBlocked])
 
     const handleDeleteProject = async () => {
         if (!draftMeta.draftId) {
@@ -764,6 +853,8 @@ const CreateEventDP = () => {
                         activeMenu={activeMenu}
                         onMenuChange={setActiveMenu}
                         onCollapse={() => setDesktopSidebarOpen(false)}
+                        storage={storageStatus}
+                        onStorageDetailsClick={handleStorageLimitDetails}
                     />
                 )}
 
@@ -850,7 +941,7 @@ const CreateEventDP = () => {
 
                     <CanvasStage
                         uploadedImage={uploadedImage}
-                        onUpload={handleImageUpload}
+                        onUpload={handleUploadImage}
                         onRemove={removeUploadedImage}
                         backgroundOpacity={backgroundOpacity}
                         cornerRadius={cornerRadius}
@@ -871,6 +962,9 @@ const CreateEventDP = () => {
                         guestTextStyle={guestTextStyle}
                         showMobileToolSwitch={showMobileToolSwitch}
                         disabled={isEditorLocked}
+                        projectCreationBlocked={isProjectCreationBlocked}
+                        onRequestStorageInfo={handleStorageLimitDetails}
+                        projectSlotLimit={storageStatus.maxEvents || 5}
                     />
                 </section>
 
@@ -990,6 +1084,46 @@ const CreateEventDP = () => {
                     </>
                 )}
             </div>
+
+            {showStorageLimitModal && (
+                <div className='fixed inset-0 z-50 bg-dark-slate/60 flex items-center justify-center p-3 sm:p-4'>
+                    <div className='w-full max-w-md rounded-2xl bg-white shadow-2xl p-5 sm:p-6 space-y-4'>
+                        <div className='flex items-start gap-3'>
+                            <div className='h-11 w-11 rounded-full bg-forest-green/10 flex items-center justify-center shrink-0'>
+                                <Icon icon='mdi:database-alert-outline' width='24' height='24' className='text-forest-green' />
+                            </div>
+                            <div>
+                                <h3 className='text-lg font-bold text-dark-slate'>Project limit reached</h3>
+                                <p className='text-sm text-dark-slate/70 mt-1'>
+                                    You currently have {storageStatus.usedEvents || 0} of {storageStatus.maxEvents || 5} project slots used.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className='rounded-xl border border-dusty-green/25 bg-pale-sage/50 p-4 text-sm text-dark-slate/75 space-y-2'>
+                            <p>You can still edit any existing published or unpublished project.</p>
+                            <p>To create a new EventDP, delete one of your existing projects first.</p>
+                        </div>
+
+                        <div className='flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2'>
+                            <button
+                                type='button'
+                                onClick={handleStorageLimitModalClose}
+                                className='h-10 px-4 rounded-xl border border-dusty-green/35 text-dark-slate font-semibold w-full sm:w-auto'
+                            >
+                                Close
+                            </button>
+                            <button
+                                type='button'
+                                onClick={handleGoToDashboard}
+                                className='h-10 px-4 rounded-xl bg-forest-green text-white font-semibold w-full sm:w-auto'
+                            >
+                                Manage projects
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {showPublishConfirm && (
                 <div className='fixed inset-0 z-50 bg-dark-slate/55 flex items-center justify-center p-3 sm:p-4'>

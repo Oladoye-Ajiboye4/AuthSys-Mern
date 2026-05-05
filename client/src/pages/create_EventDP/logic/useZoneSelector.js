@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from 'react'
 import { computeZoneFromDrag } from './canvasMath'
-import { createZoneCoordinates } from './zoneCoordinates'
+import { createZoneCoordinates, resolveZoneDisplay } from './zoneCoordinates'
 
 const MIN_ZONE_SIZE = 12
 
@@ -63,6 +63,7 @@ const useZoneSelector = ({ zoneShape, committedZone, onZoneCommit, canvasDimensi
 
     const [isInteracting, setIsInteracting] = useState(false)
     const [draftRect, setDraftRect] = useState(null)
+    const committedDisplayRect = resolveZoneDisplay(committedZone, canvasDimensions, displayedCanvasSize)
 
     const getLocalCoords = useCallback((event) => {
         const el = canvasRef.current
@@ -105,7 +106,7 @@ const useZoneSelector = ({ zoneShape, committedZone, onZoneCommit, canvasDimensi
         if (event.target.closest('[data-zone-control]')) return
 
         const point = getLocalCoords(event)
-        const activeRect = committedZone?.display
+        const activeRect = committedDisplayRect
         const handle = event.target.dataset?.resizeHandle
 
         if (event.cancelable) event.preventDefault()
@@ -139,7 +140,7 @@ const useZoneSelector = ({ zoneShape, committedZone, onZoneCommit, canvasDimensi
         }
         setIsInteracting(true)
         setDraftRect({ x: point.x, y: point.y, width: 0, height: 0 })
-    }, [committedZone, getLocalCoords])
+    }, [committedDisplayRect, getLocalCoords])
 
     const onPointerMove = useCallback((event) => {
         if (!isInteracting || !interactionRef.current || !canvasRef.current) return
@@ -196,7 +197,7 @@ const useZoneSelector = ({ zoneShape, committedZone, onZoneCommit, canvasDimensi
         commitRect(draftRect)
     }, [commitRect, draftRect, isInteracting])
 
-    const activeRect = draftRect || committedZone?.display || null
+    const activeRect = draftRect || committedDisplayRect || null
 
     return {
         canvasRef,

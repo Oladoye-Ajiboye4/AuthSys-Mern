@@ -53,6 +53,20 @@ export const createDraft = async ({ token, asset, editor, title }) => {
     return response.data
 }
 
+export const getDashboard = async ({ token, search = '' }) => {
+    const response = await axios.get(
+        `${BASE_URL}getDashboard`,
+        {
+            params: search ? { search } : {},
+            headers: {
+                Authorization: `Bearer ${token}`,
+            },
+        },
+    )
+
+    return response.data
+}
+
 export const autosaveDraft = async ({ token, draftId, editor, baseRevision, title }) => {
     const response = await axios.patch(
         `${BASE_URL}createEventDP/drafts/${draftId}/autosave`,

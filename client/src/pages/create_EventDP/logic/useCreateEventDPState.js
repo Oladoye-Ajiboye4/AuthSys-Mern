@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { BORDER_STYLES } from '../constants'
 import { clamp, fitCanvasToViewport, ZONE_SHAPES } from './canvasMath'
 import useHistoryStack from './useHistoryStack'
+import { actualToDisplay, actualToNormalized, displayToActual } from './zoneCoordinates'
 
 const createSnapshot = (state) => ({
     zoneShape: state.zoneShape,
@@ -135,6 +136,38 @@ const normalizeTextStyle = (style) => {
 
 const getZoneStyle = (zone, fallbackStyle = DEFAULT_GUEST_TEXT_STYLE) => {
     return normalizeTextStyle(zone?.style || fallbackStyle)
+}
+
+const rehydrateZoneCoordinates = (zone, canvasDimensions, hostCanvasSize) => {
+    if (!zone || typeof zone !== 'object') {
+        return null
+    }
+
+    const hasActual = Number(zone.actual?.width) > 0 && Number(zone.actual?.height) > 0
+    const hasDisplay = Number(zone.display?.width) > 0 && Number(zone.display?.height) > 0
+    const actual = hasActual
+        ? {
+            ...zone.actual,
+        }
+        : (hasDisplay ? displayToActual(zone.display, hostCanvasSize, canvasDimensions) : null)
+
+    if (!actual) {
+        return {
+            ...zone,
+            display: hasDisplay ? { ...zone.display } : null,
+            actual: null,
+            normalised: zone.normalised && Number(zone.normalised.width) > 0 && Number(zone.normalised.height) > 0
+                ? { ...zone.normalised }
+                : null,
+        }
+    }
+
+    return {
+        ...zone,
+        display: actualToDisplay(actual, canvasDimensions, hostCanvasSize) || (hasDisplay ? { ...zone.display } : null),
+        actual,
+        normalised: actualToNormalized(actual, canvasDimensions),
+    }
 }
 
 const useCreateEventDPState = () => {
@@ -438,9 +471,17 @@ const useCreateEventDPState = () => {
             ...DEFAULT_EDITOR_STATE,
             ...(snapshot || {}),
         }
+        const snapshotZoom = clamp(Number(safeSnapshot.zoom) || 1, 0.5, 1.8)
+        const snapshotCanvasSize = fitCanvasToViewport({
+            canvasWidth: canvasDimensions.width,
+            canvasHeight: canvasDimensions.height,
+            viewportWidth: 340,
+            viewportHeight: 610,
+            zoom: snapshotZoom,
+        })
 
         setZoneShape(safeSnapshot.zoneShape)
-        setCommittedZone(safeSnapshot.committedZone || null)
+        setCommittedZone(rehydrateZoneCoordinates(safeSnapshot.committedZone, canvasDimensions, snapshotCanvasSize))
         setBleedGuides(Boolean(safeSnapshot.bleedGuides))
         setBackgroundOpacity(clamp(Number(safeSnapshot.backgroundOpacity), 25, 100))
         setCornerRadius(clamp(Number(safeSnapshot.cornerRadius), 0, 52))
@@ -452,7 +493,7 @@ const useCreateEventDPState = () => {
             ? safeSnapshot.textZones
                 .slice(0, MAX_TEXT_ZONES)
                 .map((zone) => ({
-                    ...(zone || {}),
+                    ...rehydrateZoneCoordinates(zone, canvasDimensions, snapshotCanvasSize),
                     style: getZoneStyle(zone, normalizedSnapshotStyle),
                 }))
             : []
@@ -468,7 +509,7 @@ const useCreateEventDPState = () => {
         setActiveTextZoneIndex(nextActiveIndex)
         setActiveCanvasTool(safeSnapshot.activeCanvasTool || 'photo')
         setGuestTextStyle(nextGuestTextStyle)
-        setZoom(clamp(Number(safeSnapshot.zoom) || 1, 0.5, 1.8))
+        setZoom(snapshotZoom)
         setActiveMenu(safeSnapshot.activeMenu || DEFAULT_EDITOR_STATE.activeMenu)
     }
 

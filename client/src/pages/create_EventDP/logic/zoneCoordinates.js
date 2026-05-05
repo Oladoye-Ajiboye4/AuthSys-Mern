@@ -7,6 +7,19 @@
  * - Normalized: 0-1 ratio based on image dimensions (robust fallback)
  */
 
+const isPositiveDimensionRect = (rect) => (
+    rect
+    && Number(rect.width) > 0
+    && Number(rect.height) > 0
+)
+
+const scaleRect = (rect, scaleX, scaleY) => ({
+    x: Math.round(Number(rect?.x || 0) * scaleX),
+    y: Math.round(Number(rect?.y || 0) * scaleY),
+    width: Math.round(Number(rect?.width || 0) * scaleX),
+    height: Math.round(Number(rect?.height || 0) * scaleY),
+})
+
 /**
  * Calculate actual coordinates from display coordinates
  * @param {Object} displayCoords - {x, y, width, height} in viewport pixels
@@ -20,12 +33,23 @@ export const displayToActual = (displayCoords, hostCanvasSize, imageDimensions) 
     const scaleX = imageDimensions.width / hostCanvasSize.width
     const scaleY = imageDimensions.height / hostCanvasSize.height
 
-    return {
-        x: Math.round(displayCoords.x * scaleX),
-        y: Math.round(displayCoords.y * scaleY),
-        width: Math.round(displayCoords.width * scaleX),
-        height: Math.round(displayCoords.height * scaleY),
-    }
+    return scaleRect(displayCoords, scaleX, scaleY)
+}
+
+/**
+ * Calculate display coordinates from actual coordinates
+ * @param {Object} actual - {x, y, width, height} in image pixels
+ * @param {Object} imageDimensions - Full image size {width, height}
+ * @param {Object} hostCanvasSize - Current display canvas size {width, height}
+ * @returns {Object} {x, y, width, height} in viewport pixels
+ */
+export const actualToDisplay = (actual, imageDimensions, hostCanvasSize) => {
+    if (!actual || !imageDimensions || !hostCanvasSize) return null
+
+    const scaleX = hostCanvasSize.width / imageDimensions.width
+    const scaleY = hostCanvasSize.height / imageDimensions.height
+
+    return scaleRect(actual, scaleX, scaleY)
 }
 
 /**
@@ -60,12 +84,19 @@ export const normalizedToActual = (normalized, imageDimensions) => {
     const imageWidth = Math.max(1, Math.abs(imageDimensions.width))
     const imageHeight = Math.max(1, Math.abs(imageDimensions.height))
 
-    return {
-        x: Math.round(normalized.x * imageWidth),
-        y: Math.round(normalized.y * imageHeight),
-        width: Math.round(normalized.width * imageWidth),
-        height: Math.round(normalized.height * imageHeight),
-    }
+    return scaleRect(normalized, imageWidth, imageHeight)
+}
+
+/**
+ * Calculate display coordinates from normalized coordinates
+ * @param {Object} normalized - {x, y, width, height} as 0-1 ratios
+ * @param {Object} imageDimensions - Full image size {width, height}
+ * @param {Object} hostCanvasSize - Current display canvas size {width, height}
+ * @returns {Object} {x, y, width, height} in viewport pixels
+ */
+export const normalizedToDisplay = (normalized, imageDimensions, hostCanvasSize) => {
+    const actual = normalizedToActual(normalized, imageDimensions)
+    return actual ? actualToDisplay(actual, imageDimensions, hostCanvasSize) : null
 }
 
 /**
@@ -124,6 +155,38 @@ export const resolveZoneActual = (zone, imageDimensions) => {
 
     // Priority 3: Display (fallback only)
     if (zone.display && zone.display.width > 0 && zone.display.height > 0) {
+        return zone.display
+    }
+
+    return null
+}
+
+/**
+ * Resolve the best display rectangle for the current canvas size.
+ * Priority: actual > normalised > display
+ * @param {Object} zone - Zone with any combination of {display, actual, normalised}
+ * @param {Object} imageDimensions - Full image dimensions
+ * @param {Object} hostCanvasSize - Current display canvas size
+ * @returns {Object} Resolved display coordinates
+ */
+export const resolveZoneDisplay = (zone, imageDimensions, hostCanvasSize) => {
+    if (!zone) return null
+
+    if (isPositiveDimensionRect(zone.actual) && imageDimensions && hostCanvasSize) {
+        const resolved = actualToDisplay(zone.actual, imageDimensions, hostCanvasSize)
+        if (resolved && resolved.width > 0 && resolved.height > 0) {
+            return resolved
+        }
+    }
+
+    if (isPositiveDimensionRect(zone.normalised) && imageDimensions && hostCanvasSize) {
+        const resolved = normalizedToDisplay(zone.normalised, imageDimensions, hostCanvasSize)
+        if (resolved && resolved.width > 0 && resolved.height > 0) {
+            return resolved
+        }
+    }
+
+    if (isPositiveDimensionRect(zone.display)) {
         return zone.display
     }
 
